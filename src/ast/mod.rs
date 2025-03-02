@@ -1,6 +1,6 @@
-//     terebinth - lightweight interpreted programming language
+//     terebinth - lightweight programming language
 //     Copyright (C) 2024 Cameron Howell
 //
 //     Licensed under the MIT License
 
-use std::rc::Rc;
+pub mod lexer;
