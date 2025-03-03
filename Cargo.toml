@@ -10,5 +10,6 @@ repository = "https://github.com/October-Studios/terebinth"
 rust-version = "1.85"
 
 [dependencies]
+clap = { version = "4.5.31", features = ["derive"] }
 log = "0.4.21"
 termion = "4.0.4"

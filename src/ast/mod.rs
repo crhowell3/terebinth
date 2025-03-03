@@ -234,12 +234,6 @@ pub struct AstVariableExpression {
     pub identifier: Token,
 }
 
-impl AstVariableExpression {
-    pub fn identifier(&self) -> &str {
-        &self.identifier.span.literal
-    }
-}
-
 #[derive(Debug)]
 pub enum AstBinaryOperatorKind {
     Plus,
@@ -319,5 +313,169 @@ impl AstExpression {
 
     pub fn error(span: TextSpan) -> Self {
         AstExpression::new(AstExpressionKind::Error(span))
+    }
+}
+
+#[cfg(test)]
+mod test {
+    use crate::compilation_unit::CompilationUnit;
+
+    use super::{Ast, AstVisitor};
+
+    #[derive(Debug, PartialEq, Eq)]
+    enum TestAstNode {
+        Number(i64),
+        Binary,
+        Parenthesized,
+        LetStmt,
+        Variable(String),
+    }
+
+    struct AstVerifier {
+        expected: Vec<TestAstNode>,
+        actual: Vec<TestAstNode>,
+    }
+
+    impl AstVerifier {
+        pub fn new(input: &str, expected: Vec<TestAstNode>) -> Self {
+            let compilation_unit = CompilationUnit::compile(input);
+            let mut verifier = AstVerifier {
+                expected,
+                actual: Vec::new(),
+            };
+            verifier.flatten_ast(&compilation_unit.ast);
+            verifier
+        }
+
+        fn flatten_ast(&mut self, ast: &Ast) {
+            self.actual.clear();
+            ast.visit(&mut *self);
+        }
+
+        pub fn verify(&self) {
+            assert_eq!(
+                self.expected.len(),
+                self.actual.len(),
+                "Expected {} nodes, but got {}",
+                self.expected.len(),
+                self.actual.len()
+            );
+
+            for (index, (expected, actual)) in
+                self.expected.iter().zip(self.actual.iter()).enumerate()
+            {
+                assert_eq!(
+                    expected, actual,
+                    "Expected {:?} at index {}, but got {:?}",
+                    expected, index, actual
+                );
+            }
+        }
+    }
+
+    impl AstVisitor for AstVerifier {
+        fn visit_let_statement(&mut self, let_statement: &super::AstLetStatement) {
+            self.actual.push(TestAstNode::LetStmt);
+            self.visit_expression(&let_statement.initializer);
+        }
+
+        fn visit_variable_expression(
+            &mut self,
+            variable_expression: &super::AstVariableExpression,
+        ) {
+            self.actual.push(TestAstNode::Variable(
+                variable_expression.identifier.span.literal.clone(),
+            ));
+        }
+
+        fn visit_number_expression(&mut self, number: &super::AstNumberExpression) {
+            self.actual.push(TestAstNode::Number(number.number));
+        }
+
+        fn visit_error(&mut self, span: &super::lexer::TextSpan) {
+            // TODO
+        }
+
+        fn visit_parenthesized_expression(
+            &mut self,
+            parenthesized_expression: &super::AstParenthesizedExpression,
+        ) {
+            self.actual.push(TestAstNode::Parenthesized);
+            self.visit_expression(&parenthesized_expression.expression);
+        }
+
+        fn visit_binary_expression(&mut self, binary_expression: &super::AstBinaryExpression) {
+            self.actual.push(TestAstNode::Binary);
+            self.visit_expression(&binary_expression.left);
+            self.visit_expression(&binary_expression.right);
+        }
+    }
+
+    fn assert_tree(input: &str, expected: Vec<TestAstNode>) {
+        let verifier = AstVerifier::new(input, expected);
+        verifier.verify();
+    }
+
+    #[test]
+    pub fn should_parse_basic_binary_expression() {
+        let input = "let a = 1 + 2";
+        let expected = vec![
+            TestAstNode::LetStmt,
+            TestAstNode::Binary,
+            TestAstNode::Number(1),
+            TestAstNode::Number(2),
+        ];
+
+        assert_tree(input, expected);
+    }
+
+    #[test]
+    pub fn should_parse_parenthesized_binary_expression() {
+        let input = "let a = (1 + 2) * 3";
+        let expected = vec![
+            TestAstNode::LetStmt,
+            TestAstNode::Binary,
+            TestAstNode::Parenthesized,
+            TestAstNode::Binary,
+            TestAstNode::Number(1),
+            TestAstNode::Number(2),
+            TestAstNode::Number(3),
+        ];
+
+        assert_tree(input, expected);
+    }
+
+    #[test]
+    pub fn should_parse_parenthesized_binary_expression_with_variable() {
+        let input = "let a = (1 + 2) * b";
+        let expected = vec![
+            TestAstNode::LetStmt,
+            TestAstNode::Binary,
+            TestAstNode::Parenthesized,
+            TestAstNode::Binary,
+            TestAstNode::Number(1),
+            TestAstNode::Number(2),
+            TestAstNode::Variable("b".to_string()),
+        ];
+
+        assert_tree(input, expected);
+    }
+
+    #[test]
+    pub fn should_parse_parenthesized_binary_expression_with_variable_and_number() {
+        let input = "let a = (1 + 2) * b + 3";
+        let expected = vec![
+            TestAstNode::LetStmt,
+            TestAstNode::Binary,
+            TestAstNode::Binary,
+            TestAstNode::Parenthesized,
+            TestAstNode::Binary,
+            TestAstNode::Number(1),
+            TestAstNode::Number(2),
+            TestAstNode::Variable("b".to_string()),
+            TestAstNode::Number(3),
+        ];
+
+        assert_tree(input, expected);
     }
 }

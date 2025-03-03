@@ -31,7 +31,7 @@ impl<'a> DiagnosticsPrinter<'a> {
 
         let indent = std::cmp::min(PREFIX_LENGTH, column);
         let (arrow_pointers, arrow_line) = Self::format_arrow(diagnostic, indent);
-        let error_message = Self::format_error_message(diagnostic, indent);
+        let error_message = Self::format_error_message(diagnostic, indent, column, line_index);
         format!(
             "{}{}{}{}{}\n{}\n{}\n{}",
             prefix,
@@ -45,8 +45,20 @@ impl<'a> DiagnosticsPrinter<'a> {
         )
     }
 
-    fn format_error_message(diagnostic: &Diagnostic, indent: usize) -> String {
-        format!("{:indent$}+-- {}", "", diagnostic.message, indent = indent)
+    fn format_error_message(
+        diagnostic: &Diagnostic,
+        indent: usize,
+        column: usize,
+        line_index: usize,
+    ) -> String {
+        format!(
+            "{:indent$}+-- {} ({}:{})",
+            "",
+            diagnostic.message,
+            column,
+            line_index,
+            indent = indent,
+        )
     }
 
     fn format_arrow(diagnostic: &Diagnostic, indent: usize) -> (String, String) {
