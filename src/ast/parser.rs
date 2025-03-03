@@ -8,7 +8,7 @@ use std::cell::Cell;
 use crate::diagnostics::DiagnosticsListCell;
 
 use super::{
-    AstBinaryOperator, AstBinaryOperatorKind, AstExpression, AstStatement,
+    Ast, AstBinaryOperator, AstBinaryOperatorKind, AstExpression, AstStatement,
     lexer::{Token, TokenKind},
 };
 
@@ -64,8 +64,23 @@ impl Parser {
     }
 
     fn parse_statement(&mut self) -> AstStatement {
+        match self.current().kind {
+            TokenKind::Let => self.parse_let_statement(),
+            _ => self.parse_expression_statement(),
+        }
+    }
+
+    fn parse_expression_statement(&mut self) -> AstStatement {
         let expr = self.parse_expression();
         AstStatement::expression(expr)
+    }
+
+    fn parse_let_statement(&mut self) -> AstStatement {
+        self.consume_and_check(TokenKind::Let);
+        let identifier = self.consume_and_check(TokenKind::Identifier).clone();
+        self.consume_and_check(TokenKind::Equals);
+        let expr = self.parse_expression();
+        AstStatement::let_statement(identifier.clone(), expr)
     }
 
     fn parse_expression(&mut self) -> AstExpression {
@@ -109,6 +124,7 @@ impl Parser {
                 self.consume_and_check(TokenKind::RightParen);
                 AstExpression::parenthesized(expr)
             }
+            TokenKind::Identifier => AstExpression::identifier(token.clone()),
             _ => {
                 self.diagnostics_list
                     .borrow_mut()

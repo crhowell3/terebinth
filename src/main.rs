@@ -18,7 +18,11 @@ mod diagnostics;
 mod source;
 
 fn main() {
-    let input = "7 + 8 * 9";
+    let input = "
+    let a = 10 + 40
+    let b = 5
+    let c = a + b
+";
     let text = source::SourceText::new(input.to_string());
 
     let mut lexer = Lexer::new(input);

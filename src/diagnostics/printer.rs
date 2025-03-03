@@ -68,7 +68,7 @@ impl<'a> DiagnosticsPrinter<'a> {
     ) -> (&'a str, &'a str, &'a str) {
         let prefix_start = std::cmp::max(0, column as isize - PREFIX_LENGTH as isize) as usize;
         let prefix_end = column;
-        let suffix_start = std::cmp::min(column + diagnostic.span.length(), line.len()) + 1;
+        let suffix_start = std::cmp::min(column + diagnostic.span.length(), line.len());
         let suffix_end = std::cmp::min(suffix_start + PREFIX_LENGTH, line.len());
 
         let prefix = &line[prefix_start..prefix_end];

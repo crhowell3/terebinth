@@ -44,8 +44,13 @@ pub trait AstVisitor {
             AstStatementKind::Expression(expr) => {
                 self.visit_expression(expr);
             }
+            AstStatementKind::LetStatement(expr) => {
+                self.visit_let_statement(expr);
+            }
         }
     }
+
+    fn visit_let_statement(&mut self, let_statement: &AstLetStatement);
 
     fn visit_statement(&mut self, statement: &AstStatement) {
         self.do_visit_statement(statement);
@@ -54,7 +59,7 @@ pub trait AstVisitor {
     fn do_visit_expression(&mut self, expression: &AstExpression) {
         match &expression.kind {
             AstExpressionKind::Number(number) => {
-                self.visit_number(number);
+                self.visit_number_expression(number);
             }
             AstExpressionKind::Binary(expr) => {
                 self.visit_binary_expression(expr);
@@ -65,6 +70,9 @@ pub trait AstVisitor {
             AstExpressionKind::Error(span) => {
                 self.visit_error(span);
             }
+            AstExpressionKind::Variable(expr) => {
+                self.visit_variable_expression(expr);
+            }
         }
     }
 
@@ -72,21 +80,18 @@ pub trait AstVisitor {
         self.do_visit_expression(expression);
     }
 
-    fn visit_number(&mut self, number: &AstNumberExpression);
+    fn visit_variable_expression(&mut self, variable_expression: &AstVariableExpression);
+
+    fn visit_number_expression(&mut self, number: &AstNumberExpression);
 
     fn visit_error(&mut self, span: &TextSpan);
 
-    fn visit_binary_expression(&mut self, binary_expression: &AstBinaryExpression) {
-        self.visit_expression(&binary_expression.left);
-        self.visit_expression(&binary_expression.right);
-    }
+    fn visit_binary_expression(&mut self, binary_expression: &AstBinaryExpression);
 
     fn visit_parenthesized_expression(
         &mut self,
         parenthesized_expression: &AstParenthesizedExpression,
-    ) {
-        self.visit_expression(&parenthesized_expression.expression);
-    }
+    );
 }
 
 pub struct AstPrinter {
@@ -96,7 +101,9 @@ pub struct AstPrinter {
 
 impl AstPrinter {
     const NUMBER_COLOR: color::Magenta = color::Magenta;
-    const TEXT_COLOR: color::White = color::White;
+    const TEXT_COLOR: color::LightWhite = color::LightWhite;
+    const KEYWORD_COLOR: color::Blue = color::Blue;
+    const VARIABLE_COLOR: color::Green = color::Green;
 
     fn add_whitespace(&mut self) {
         self.result.push(' ');
@@ -115,11 +122,28 @@ impl AstPrinter {
 }
 
 impl AstVisitor for AstPrinter {
+    fn visit_let_statement(&mut self, let_statement: &AstLetStatement) {
+        self.result
+            .push_str(&format!("{}let", Self::KEYWORD_COLOR.fg_str()));
+        self.add_whitespace();
+        self.result.push_str(&format!(
+            "{}{}",
+            Self::TEXT_COLOR.fg_str(),
+            let_statement.identifier.span.literal
+        ));
+        self.add_whitespace();
+        self.result
+            .push_str(&format!("{}=", Self::TEXT_COLOR.fg_str()));
+        self.add_whitespace();
+        self.visit_expression(&let_statement.initializer);
+    }
+
     fn visit_statement(&mut self, statement: &AstStatement) {
         Self::do_visit_statement(self, statement);
-        self.result.push_str(&format!("{}", Fg(Reset)));
+        self.result.push_str(&format!("{}\n", Fg(Reset)));
     }
-    fn visit_number(&mut self, number: &AstNumberExpression) {
+
+    fn visit_number_expression(&mut self, number: &AstNumberExpression) {
         self.result
             .push_str(&format!("{}{}", Self::NUMBER_COLOR.fg_str(), number.number));
     }
@@ -151,10 +175,24 @@ impl AstVisitor for AstPrinter {
         self.result
             .push_str(&format!("{}{}", Self::TEXT_COLOR.fg_str(), ")"));
     }
+
+    fn visit_variable_expression(&mut self, variable_expression: &AstVariableExpression) {
+        self.result.push_str(&format!(
+            "{}{}",
+            Self::VARIABLE_COLOR.fg_str(),
+            variable_expression.identifier.span.literal
+        ));
+    }
 }
 
 pub enum AstStatementKind {
     Expression(AstExpression),
+    LetStatement(AstLetStatement),
+}
+
+pub struct AstLetStatement {
+    identifier: Token,
+    initializer: AstExpression,
 }
 
 pub struct AstStatement {
@@ -169,13 +207,32 @@ impl AstStatement {
     pub fn expression(expr: AstExpression) -> Self {
         AstStatement::new(AstStatementKind::Expression(expr))
     }
+
+    pub fn let_statement(identifier: Token, initializer: AstExpression) -> Self {
+        AstStatement::new(AstStatementKind::LetStatement(AstLetStatement {
+            identifier,
+            initializer,
+        }))
+    }
 }
 
 pub enum AstExpressionKind {
     Number(AstNumberExpression),
     Binary(AstBinaryExpression),
     Parenthesized(AstParenthesizedExpression),
+    Variable(AstVariableExpression),
     Error(TextSpan),
+}
+
+#[derive(Debug)]
+pub struct AstVariableExpression {
+    identifier: Token,
+}
+
+impl AstVariableExpression {
+    pub fn identifier(&self) -> &str {
+        &self.identifier.span.literal
+    }
 }
 
 #[derive(Debug)]
@@ -247,6 +304,12 @@ impl AstExpression {
                 expression: Box::new(expression),
             },
         ))
+    }
+
+    pub fn identifier(identifier: Token) -> Self {
+        AstExpression::new(AstExpressionKind::Variable(AstVariableExpression {
+            identifier,
+        }))
     }
 
     pub fn error(span: TextSpan) -> Self {
