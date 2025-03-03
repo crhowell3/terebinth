@@ -11,3 +11,4 @@ rust-version = "1.85"
 
 [dependencies]
 log = "0.4.21"
+termion = "4.0.4"

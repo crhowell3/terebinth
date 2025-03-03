@@ -3,7 +3,8 @@
 //
 //     Licensed under the MIT License
 
-use lexer::Token;
+use lexer::{TextSpan, Token};
+use termion::color::{self, Fg, Reset};
 
 pub mod evaluator;
 pub mod lexer;
@@ -31,8 +32,9 @@ impl Ast {
     }
 
     pub fn visualize(&self) {
-        let mut printer = AstPrinter { indent: 0 };
+        let mut printer = AstPrinter::new();
         self.visit(&mut printer);
+        println!("{}", printer.result);
     }
 }
 
@@ -60,6 +62,9 @@ pub trait AstVisitor {
             AstExpressionKind::Parenthesized(expr) => {
                 self.visit_parenthesized_expression(expr);
             }
+            AstExpressionKind::Error(span) => {
+                self.visit_error(span);
+            }
         }
     }
 
@@ -68,6 +73,8 @@ pub trait AstVisitor {
     }
 
     fn visit_number(&mut self, number: &AstNumberExpression);
+
+    fn visit_error(&mut self, span: &TextSpan);
 
     fn visit_binary_expression(&mut self, binary_expression: &AstBinaryExpression) {
         self.visit_expression(&binary_expression.left);
@@ -84,51 +91,65 @@ pub trait AstVisitor {
 
 pub struct AstPrinter {
     indent: usize,
+    result: String,
 }
-const LEVEL_INDENT: usize = 2;
+
+impl AstPrinter {
+    const NUMBER_COLOR: color::Magenta = color::Magenta;
+    const TEXT_COLOR: color::White = color::White;
+
+    fn add_whitespace(&mut self) {
+        self.result.push(' ');
+    }
+
+    fn add_newline(&mut self) {
+        self.result.push('\n');
+    }
+
+    pub fn new() -> Self {
+        Self {
+            indent: 0,
+            result: String::new(),
+        }
+    }
+}
 
 impl AstVisitor for AstPrinter {
     fn visit_statement(&mut self, statement: &AstStatement) {
-        self.print_with_indent("Statement:");
-        self.indent += LEVEL_INDENT;
-        AstVisitor::do_visit_statement(self, statement);
-        self.indent -= LEVEL_INDENT;
+        Self::do_visit_statement(self, statement);
+        self.result.push_str(&format!("{}", Fg(Reset)));
     }
-
-    fn visit_expression(&mut self, expression: &AstExpression) {
-        self.print_with_indent("Expression:");
-        self.indent += LEVEL_INDENT;
-        AstVisitor::do_visit_expression(self, expression);
-        self.indent -= 2;
-    }
-
     fn visit_number(&mut self, number: &AstNumberExpression) {
-        self.print_with_indent(&format!("Number: {}", number.number));
+        self.result
+            .push_str(&format!("{}{}", Self::NUMBER_COLOR.fg_str(), number.number));
+    }
+
+    fn visit_error(&mut self, span: &TextSpan) {
+        self.result
+            .push_str(&format!("{}{}", Self::TEXT_COLOR.fg_str(), span.literal));
     }
 
     fn visit_binary_expression(&mut self, binary_expression: &AstBinaryExpression) {
-        self.print_with_indent("Binary Expression:");
-        self.indent += LEVEL_INDENT;
-        self.print_with_indent(&format!("Operator: {:?}", binary_expression.operator.kind));
         self.visit_expression(&binary_expression.left);
+        self.add_whitespace();
+        self.result.push_str(&format!(
+            "{}{}",
+            Self::TEXT_COLOR.fg_str(),
+            binary_expression.operator.token.span.literal
+        ));
+        self.add_whitespace();
         self.visit_expression(&binary_expression.right);
-        self.indent -= LEVEL_INDENT;
     }
 
     fn visit_parenthesized_expression(
         &mut self,
         parenthesized_expression: &AstParenthesizedExpression,
     ) {
-        self.print_with_indent("Parenthesized Expression:");
-        self.indent += LEVEL_INDENT;
+        self.result
+            .push_str(&format!("{}{}", Self::TEXT_COLOR.fg_str(), "("));
         self.visit_expression(&parenthesized_expression.expression);
-        self.indent -= LEVEL_INDENT;
-    }
-}
-
-impl AstPrinter {
-    fn print_with_indent(&mut self, text: &str) {
-        println!("{}{}", " ".repeat(self.indent), text);
+        self.result
+            .push_str(&format!("{}{}", Self::TEXT_COLOR.fg_str(), ")"));
     }
 }
 
@@ -154,6 +175,7 @@ pub enum AstExpressionKind {
     Number(AstNumberExpression),
     Binary(AstBinaryExpression),
     Parenthesized(AstParenthesizedExpression),
+    Error(TextSpan),
 }
 
 #[derive(Debug)]
@@ -225,5 +247,9 @@ impl AstExpression {
                 expression: Box::new(expression),
             },
         ))
+    }
+
+    pub fn error(span: TextSpan) -> Self {
+        AstExpression::new(AstExpressionKind::Error(span))
     }
 }

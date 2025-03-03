@@ -3,7 +3,7 @@
 //
 //     Licensed under the MIT License
 
-use super::{AstBinaryOperatorKind, AstNumberExpression, AstVisitor};
+use super::{AstBinaryOperatorKind, AstNumberExpression, AstVisitor, lexer::TextSpan};
 
 pub struct AstEvaluator {
     pub last_value: Option<i64>,
@@ -18,6 +18,10 @@ impl AstEvaluator {
 impl AstVisitor for AstEvaluator {
     fn visit_number(&mut self, number: &AstNumberExpression) {
         self.last_value = Some(number.number);
+    }
+
+    fn visit_error(&mut self, span: &TextSpan) {
+        todo!()
     }
 
     fn visit_binary_expression(&mut self, expr: &super::AstBinaryExpression) {

@@ -3,6 +3,8 @@
 //
 //     Licensed under the MIT License
 
+use std::fmt::{Display, Formatter};
+
 #[derive(Debug, PartialEq, Clone)]
 pub enum TokenKind {
     Number(i64),
@@ -16,6 +18,24 @@ pub enum TokenKind {
     Semicolon,
     Whitespace,
     Invalid,
+}
+
+impl Display for TokenKind {
+    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+        match self {
+            TokenKind::Number(_) => write!(f, "Number"),
+            TokenKind::Plus => write!(f, "+"),
+            TokenKind::Minus => write!(f, "-"),
+            TokenKind::Asterisk => write!(f, "*"),
+            TokenKind::Slash => write!(f, "/"),
+            TokenKind::LeftParen => write!(f, "("),
+            TokenKind::RightParen => write!(f, ")"),
+            TokenKind::Eof => write!(f, "EOF"),
+            TokenKind::Semicolon => write!(f, ";"),
+            TokenKind::Whitespace => write!(f, "Whitespace"),
+            TokenKind::Invalid => write!(f, "Invalid"),
+        }
+    }
 }
 
 #[derive(Debug, PartialEq, Clone)]
