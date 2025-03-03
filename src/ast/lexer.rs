@@ -3,7 +3,7 @@
 //
 //     Licensed under the MIT License
 
-#[derive(Debug)]
+#[derive(Debug, PartialEq, Clone)]
 pub enum TokenKind {
     Number(i64),
     Plus,
@@ -18,11 +18,11 @@ pub enum TokenKind {
     Invalid,
 }
 
-#[derive(Debug)]
+#[derive(Debug, PartialEq, Clone)]
 pub struct TextSpan {
-    start: usize,
-    end: usize,
-    literal: String,
+    pub(crate) start: usize,
+    pub(crate) end: usize,
+    pub(crate) literal: String,
 }
 
 impl TextSpan {
@@ -39,10 +39,10 @@ impl TextSpan {
     }
 }
 
-#[derive(Debug)]
+#[derive(Debug, PartialEq, Clone)]
 pub struct Token {
-    kind: TokenKind,
-    span: TextSpan,
+    pub(crate) kind: TokenKind,
+    pub(crate) span: TextSpan,
 }
 
 impl Token {
