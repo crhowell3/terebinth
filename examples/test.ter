@@ -1,1 +1,3 @@
-print("Hello, World!");
+let first_number = 1
+let second_number = 4
+let sum = first_number + second_number

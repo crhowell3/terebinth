@@ -8,7 +8,7 @@ use std::cell::Cell;
 use crate::diagnostics::DiagnosticsListCell;
 
 use super::{
-    Ast, AstBinaryOperator, AstBinaryOperatorKind, AstExpression, AstStatement,
+    AstBinaryOperator, AstBinaryOperatorKind, AstExpression, AstStatement,
     lexer::{Token, TokenKind},
 };
 

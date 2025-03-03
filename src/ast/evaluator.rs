@@ -5,7 +5,10 @@
 
 use std::collections::HashMap;
 
-use super::{AstBinaryOperatorKind, AstNumberExpression, AstVisitor, lexer::TextSpan};
+use super::{
+    AstBinaryOperatorKind, AstLetStatement, AstNumberExpression, AstParenthesizedExpression,
+    AstVariableExpression, AstVisitor, lexer::TextSpan,
+};
 
 pub struct AstEvaluator {
     pub last_value: Option<i64>,
@@ -43,7 +46,7 @@ impl AstVisitor for AstEvaluator {
         });
     }
 
-    fn visit_let_statement(&mut self, let_statement: &super::AstLetStatement) {
+    fn visit_let_statement(&mut self, let_statement: &AstLetStatement) {
         self.visit_expression(&let_statement.initializer);
         self.variables.insert(
             let_statement.identifier.span.literal.clone(),
@@ -51,7 +54,7 @@ impl AstVisitor for AstEvaluator {
         );
     }
 
-    fn visit_variable_expression(&mut self, variable_expression: &super::AstVariableExpression) {
+    fn visit_variable_expression(&mut self, variable_expression: &AstVariableExpression) {
         self.last_value = Some(
             *self
                 .variables
@@ -62,7 +65,7 @@ impl AstVisitor for AstEvaluator {
 
     fn visit_parenthesized_expression(
         &mut self,
-        parenthesized_expression: &super::AstParenthesizedExpression,
+        parenthesized_expression: &AstParenthesizedExpression,
     ) {
         self.visit_expression(&parenthesized_expression.expression);
     }

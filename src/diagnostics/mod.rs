@@ -66,4 +66,11 @@ impl DiagnosticsList {
             token.span.clone(),
         );
     }
+
+    pub fn report_undeclared_variable(&mut self, token: &Token) {
+        self.report_error(
+            format!("Undeclared variable '{}'", token.span.literal),
+            token.span.clone(),
+        );
+    }
 }

@@ -27,7 +27,7 @@ impl<'a> DiagnosticsPrinter<'a> {
 
         let column = diagnostic.span.start - line_start;
 
-        let (prefix, span, suffix) = self.get_text_spans(diagnostic, &line, column);
+        let (prefix, span, suffix) = self.get_text_spans(diagnostic, line, column);
 
         let indent = std::cmp::min(PREFIX_LENGTH, column);
         let (arrow_pointers, arrow_line) = Self::format_arrow(diagnostic, indent);
