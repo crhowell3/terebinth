@@ -43,6 +43,10 @@ impl AstVisitor for SymbolChecker {
     fn visit_number_expression(&mut self, number: &ast::AstNumberExpression) {}
 
     fn visit_error(&mut self, span: &ast::lexer::TextSpan) {}
+
+    fn visit_unary_expression(&mut self, unary_expression: &ast::AstUnaryExpression) {
+        self.visit_expression(&unary_expression.operand);
+    }
 }
 
 pub struct CompilationUnit {

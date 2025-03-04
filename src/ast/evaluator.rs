@@ -33,6 +33,10 @@ impl AstVisitor for AstEvaluator {
         todo!()
     }
 
+    fn visit_unary_expression(&mut self, unary_expression: &super::AstUnaryExpression) {
+        todo!()
+    }
+
     fn visit_binary_expression(&mut self, expr: &super::AstBinaryExpression) {
         self.visit_expression(&expr.left);
         let left = self.last_value.unwrap();

@@ -73,6 +73,9 @@ pub trait AstVisitor {
             AstExpressionKind::Variable(expr) => {
                 self.visit_variable_expression(expr);
             }
+            AstExpressionKind::Unary(expr) => {
+                self.visit_unary_expression(expr);
+            }
         }
     }
 
@@ -85,6 +88,8 @@ pub trait AstVisitor {
     fn visit_number_expression(&mut self, number: &AstNumberExpression);
 
     fn visit_error(&mut self, span: &TextSpan);
+
+    fn visit_unary_expression(&mut self, unary_expression: &AstUnaryExpression);
 
     fn visit_binary_expression(&mut self, binary_expression: &AstBinaryExpression) {
         self.visit_expression(&binary_expression.left);
@@ -158,6 +163,15 @@ impl AstVisitor for AstPrinter {
             .push_str(&format!("{}{}", Self::TEXT_COLOR.fg_str(), span.literal));
     }
 
+    fn visit_unary_expression(&mut self, unary_expression: &AstUnaryExpression) {
+        self.result.push_str(&format!(
+            "{}{}",
+            Self::TEXT_COLOR.fg_str(),
+            unary_expression.operator.token.span.literal
+        ));
+        self.visit_expression(&unary_expression.operand);
+    }
+
     fn visit_binary_expression(&mut self, binary_expression: &AstBinaryExpression) {
         self.visit_expression(&binary_expression.left);
         self.add_whitespace();
@@ -224,9 +238,24 @@ impl AstStatement {
 pub enum AstExpressionKind {
     Number(AstNumberExpression),
     Binary(AstBinaryExpression),
+    Unary(AstUnaryExpression),
     Parenthesized(AstParenthesizedExpression),
     Variable(AstVariableExpression),
     Error(TextSpan),
+}
+
+pub enum AstUnaryOperatorKind {
+    Minus,
+}
+
+pub struct AstUnaryOperator {
+    kind: AstUnaryOperatorKind,
+    token: Token,
+}
+
+pub struct AstUnaryExpression {
+    pub operator: AstUnaryOperator,
+    pub operand: Box<AstExpression>,
 }
 
 #[derive(Debug)]
@@ -320,12 +349,13 @@ impl AstExpression {
 mod test {
     use crate::compilation_unit::CompilationUnit;
 
-    use super::{Ast, AstVisitor};
+    use super::{Ast, AstUnaryExpression, AstVisitor};
 
     #[derive(Debug, PartialEq, Eq)]
     enum TestAstNode {
         Number(i64),
         Binary,
+        Unary,
         Parenthesized,
         LetStmt,
         Variable(String),
@@ -339,6 +369,12 @@ mod test {
     impl AstVerifier {
         pub fn new(input: &str, expected: Vec<TestAstNode>) -> Self {
             let compilation_unit = CompilationUnit::compile(input);
+            assert_eq!(
+                compilation_unit.diagnostics_list.borrow().diagnostics.len(),
+                0,
+                "Expected no diagnostics, but got {:?}",
+                compilation_unit.diagnostics_list.borrow().diagnostics
+            );
             let mut verifier = AstVerifier {
                 expected,
                 actual: Vec::new(),
@@ -394,6 +430,11 @@ mod test {
 
         fn visit_error(&mut self, span: &super::lexer::TextSpan) {
             // TODO
+        }
+
+        fn visit_unary_expression(&mut self, unary_expression: &AstUnaryExpression) {
+            self.actual.push(TestAstNode::Unary);
+            self.visit_expression(&unary_expression.operand);
         }
 
         fn visit_parenthesized_expression(
@@ -474,6 +515,108 @@ mod test {
             TestAstNode::Number(2),
             TestAstNode::Variable("b".to_string()),
             TestAstNode::Number(3),
+        ];
+
+        assert_tree(input, expected);
+    }
+
+    #[test]
+    pub fn should_parse_bitwise_and() {
+        let input = "let a = 1 & 2";
+        let expected = vec![
+            TestAstNode::LetStmt,
+            TestAstNode::Binary,
+            TestAstNode::Number(1),
+            TestAstNode::Number(2),
+        ];
+
+        assert_tree(input, expected);
+    }
+
+    #[test]
+    pub fn should_parse_bitwise_or() {
+        let input = "let a = 1 | 2";
+        let expected = vec![
+            TestAstNode::LetStmt,
+            TestAstNode::Binary,
+            TestAstNode::Number(1),
+            TestAstNode::Number(2),
+        ];
+
+        assert_tree(input, expected);
+    }
+
+    #[test]
+    pub fn should_parse_bitwise_xor() {
+        let input = "let a = 1 ^ 2";
+        let expected = vec![
+            TestAstNode::LetStmt,
+            TestAstNode::Binary,
+            TestAstNode::Number(1),
+            TestAstNode::Number(2),
+        ];
+
+        assert_tree(input, expected);
+    }
+
+    #[test]
+    pub fn should_parse_bitwise_not() {
+        let input = "let a = ~1";
+        let expected = vec![
+            TestAstNode::LetStmt,
+            TestAstNode::Unary,
+            TestAstNode::Number(1),
+        ];
+
+        assert_tree(input, expected);
+    }
+
+    #[test]
+    pub fn should_parse_bitwise_shift_left() {
+        let input = "let a = 1 << 2";
+        let expected = vec![
+            TestAstNode::LetStmt,
+            TestAstNode::Binary,
+            TestAstNode::Number(1),
+            TestAstNode::Number(2),
+        ];
+
+        assert_tree(input, expected);
+    }
+
+    #[test]
+    pub fn should_parse_bitwise_shift_right() {
+        let input = "let a = 2 >> 1";
+        let expected = vec![
+            TestAstNode::LetStmt,
+            TestAstNode::Binary,
+            TestAstNode::Number(2),
+            TestAstNode::Number(1),
+        ];
+
+        assert_tree(input, expected);
+    }
+
+    #[test]
+    pub fn should_parse_negation() {
+        let input = "let a = -1";
+        let expected = vec![
+            TestAstNode::LetStmt,
+            TestAstNode::Unary,
+            TestAstNode::Number(1),
+        ];
+
+        assert_tree(input, expected);
+    }
+
+    #[test]
+    pub fn should_parse_power() {
+        let input = "let a = 1 ** 2";
+        let expected = vec![
+            TestAstNode::LetStmt,
+            TestAstNode::Binary,
+            TestAstNode::Number(1),
+            TestAstNode::Number(2),
         ];
 
         assert_tree(input, expected);

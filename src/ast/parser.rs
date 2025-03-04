@@ -8,7 +8,8 @@ use std::cell::Cell;
 use crate::diagnostics::DiagnosticsListCell;
 
 use super::{
-    AstBinaryOperator, AstBinaryOperatorKind, AstExpression, AstStatement,
+    AstBinaryOperator, AstBinaryOperatorKind, AstExpression, AstStatement, AstUnaryOperator,
+    AstUnaryOperatorKind,
     lexer::{Token, TokenKind},
 };
 
@@ -88,7 +89,7 @@ impl Parser {
     }
 
     fn parse_binary_expression(&mut self, precedence: u8) -> AstExpression {
-        let mut left = self.parse_primary_expression();
+        let mut left = self.parse_unary_expression();
 
         while let Some(operator) = self.parse_binary_operator() {
             let operator_precedence = operator.precedence();
@@ -101,6 +102,23 @@ impl Parser {
         }
 
         left
+    }
+
+    fn parse_unary_expression(&mut self) -> AstExpression {
+        if let Some(operator) = self.parse_unary_operator() {
+            let operand = self.parse_unary_expression();
+            return AstExpression::unary(operator, operand);
+        }
+        self.parse_primary_expression()
+    }
+
+    fn parse_unary_operator(&mut self) -> Option<AstUnaryOperator> {
+        let token = self.current();
+        let kind = match token.kind {
+            TokenKind::Minus => Some(AstUnaryOperatorKind::Minus),
+            _ => None,
+        };
+        return kind.map(|kind| AstUnaryOperator::new(kind, token.clone()));
     }
 
     fn parse_binary_operator(&mut self) -> Option<AstBinaryOperator> {

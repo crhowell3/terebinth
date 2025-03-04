@@ -9,13 +9,13 @@ use crate::ast::lexer::{TextSpan, Token, TokenKind};
 
 pub mod printer;
 
-#[derive(Clone)]
+#[derive(Debug, Clone)]
 pub enum DiagnosticKind {
     Error,
     Warning,
 }
 
-#[derive(Clone)]
+#[derive(Debug, Clone)]
 pub struct Diagnostic {
     pub message: String,
     pub span: TextSpan,
