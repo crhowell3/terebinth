@@ -106,7 +106,8 @@ impl Parser {
 
     fn parse_unary_expression(&mut self) -> AstExpression {
         if let Some(operator) = self.parse_unary_operator() {
-            let operand = self.parse_unary_expression();
+            self.consume();
+            let operand = self.parse_expression();
             return AstExpression::unary(operator, operand);
         }
         self.parse_primary_expression()
@@ -116,9 +117,10 @@ impl Parser {
         let token = self.current();
         let kind = match token.kind {
             TokenKind::Minus => Some(AstUnaryOperatorKind::Minus),
+            TokenKind::Tilde => Some(AstUnaryOperatorKind::BitwiseNot),
             _ => None,
         };
-        return kind.map(|kind| AstUnaryOperator::new(kind, token.clone()));
+        kind.map(|kind| AstUnaryOperator::new(kind, token.clone()))
     }
 
     fn parse_binary_operator(&mut self) -> Option<AstBinaryOperator> {
@@ -128,6 +130,12 @@ impl Parser {
             TokenKind::Minus => Some(AstBinaryOperatorKind::Minus),
             TokenKind::Asterisk => Some(AstBinaryOperatorKind::Multiply),
             TokenKind::Slash => Some(AstBinaryOperatorKind::Divide),
+            TokenKind::Ampersand => Some(AstBinaryOperatorKind::BitwiseAnd),
+            TokenKind::Pipe => Some(AstBinaryOperatorKind::BitwiseOr),
+            TokenKind::Caret => Some(AstBinaryOperatorKind::BitwiseXor),
+            TokenKind::DoubleAsterisk => Some(AstBinaryOperatorKind::Power),
+            TokenKind::DoubleLessThan => Some(AstBinaryOperatorKind::LeftShift),
+            TokenKind::DoubleGreaterThan => Some(AstBinaryOperatorKind::RightShift),
             _ => None,
         };
         kind.map(|kind| AstBinaryOperator::new(kind, token.clone()))

@@ -7,7 +7,7 @@ use std::collections::HashMap;
 
 use super::{
     AstBinaryOperatorKind, AstLetStatement, AstNumberExpression, AstParenthesizedExpression,
-    AstVariableExpression, AstVisitor, lexer::TextSpan,
+    AstUnaryOperatorKind, AstVariableExpression, AstVisitor, lexer::TextSpan,
 };
 
 pub struct AstEvaluator {
@@ -34,7 +34,12 @@ impl AstVisitor for AstEvaluator {
     }
 
     fn visit_unary_expression(&mut self, unary_expression: &super::AstUnaryExpression) {
-        todo!()
+        self.visit_expression(&unary_expression.operand);
+        let operand = self.last_value.unwrap();
+        self.last_value = Some(match unary_expression.operator.kind {
+            AstUnaryOperatorKind::Minus => -operand,
+            AstUnaryOperatorKind::BitwiseNot => !operand,
+        });
     }
 
     fn visit_binary_expression(&mut self, expr: &super::AstBinaryExpression) {
@@ -47,6 +52,12 @@ impl AstVisitor for AstEvaluator {
             AstBinaryOperatorKind::Minus => left - right,
             AstBinaryOperatorKind::Multiply => left * right,
             AstBinaryOperatorKind::Divide => left / right,
+            AstBinaryOperatorKind::BitwiseAnd => left & right,
+            AstBinaryOperatorKind::BitwiseOr => left | right,
+            AstBinaryOperatorKind::Power => left.pow(right as u32),
+            AstBinaryOperatorKind::BitwiseXor => left ^ right,
+            AstBinaryOperatorKind::LeftShift => left << right,
+            AstBinaryOperatorKind::RightShift => left >> right,
         });
     }
 

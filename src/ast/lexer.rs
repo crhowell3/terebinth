@@ -7,19 +7,30 @@ use std::fmt::{Display, Formatter};
 
 #[derive(Debug, PartialEq, Clone)]
 pub enum TokenKind {
+    // Literals
     Number(i64),
+    // Operators
     Plus,
     Minus,
     Asterisk,
     Slash,
+    Equals,
+    Ampersand,
+    Pipe,
+    Caret,
+    DoubleAsterisk,
+    Tilde,
+    DoubleLessThan,
+    DoubleGreaterThan,
+    // Keywords
+    Let,
+    // Other
     LeftParen,
     RightParen,
-    Eof,
     Semicolon,
     Whitespace,
-    Let,
     Identifier,
-    Equals,
+    Eof,
     Invalid,
 }
 
@@ -40,6 +51,13 @@ impl Display for TokenKind {
             TokenKind::Let => write!(f, "let"),
             TokenKind::Identifier => write!(f, "Identifier"),
             TokenKind::Equals => write!(f, "="),
+            TokenKind::Ampersand => write!(f, "&"),
+            TokenKind::Pipe => write!(f, "|"),
+            TokenKind::Caret => write!(f, "^"),
+            TokenKind::DoubleAsterisk => write!(f, "**"),
+            TokenKind::Tilde => write!(f, "~"),
+            TokenKind::DoubleLessThan => write!(f, "<<"),
+            TokenKind::DoubleGreaterThan => write!(f, ">>"),
         }
     }
 }
@@ -129,12 +147,51 @@ impl<'a> Lexer<'a> {
         match c {
             '+' => TokenKind::Plus,
             '-' => TokenKind::Minus,
-            '*' => TokenKind::Asterisk,
+            '*' => {
+                if let Some(next) = self.current_char() {
+                    if next == '*' {
+                        self.consume();
+                        TokenKind::DoubleAsterisk
+                    } else {
+                        TokenKind::Asterisk
+                    }
+                } else {
+                    TokenKind::Asterisk
+                }
+            }
             '/' => TokenKind::Slash,
             '(' => TokenKind::LeftParen,
             ')' => TokenKind::RightParen,
             '=' => TokenKind::Equals,
             ';' => TokenKind::Semicolon,
+            '&' => TokenKind::Ampersand,
+            '|' => TokenKind::Pipe,
+            '^' => TokenKind::Caret,
+            '~' => TokenKind::Tilde,
+            '<' => {
+                if let Some(next) = self.current_char() {
+                    if next == '<' {
+                        self.consume();
+                        TokenKind::DoubleLessThan
+                    } else {
+                        TokenKind::Invalid
+                    }
+                } else {
+                    TokenKind::Invalid
+                }
+            }
+            '>' => {
+                if let Some(next) = self.current_char() {
+                    if next == '>' {
+                        self.consume();
+                        TokenKind::DoubleGreaterThan
+                    } else {
+                        TokenKind::Invalid
+                    }
+                } else {
+                    TokenKind::Invalid
+                }
+            }
             _ => TokenKind::Invalid,
         }
     }

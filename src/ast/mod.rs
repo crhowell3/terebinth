@@ -246,11 +246,18 @@ pub enum AstExpressionKind {
 
 pub enum AstUnaryOperatorKind {
     Minus,
+    BitwiseNot,
 }
 
 pub struct AstUnaryOperator {
     kind: AstUnaryOperatorKind,
     token: Token,
+}
+
+impl AstUnaryOperator {
+    pub fn new(kind: AstUnaryOperatorKind, token: Token) -> Self {
+        Self { kind, token }
+    }
 }
 
 pub struct AstUnaryExpression {
@@ -269,6 +276,12 @@ pub enum AstBinaryOperatorKind {
     Minus,
     Multiply,
     Divide,
+    Power,
+    BitwiseAnd,
+    BitwiseOr,
+    BitwiseXor,
+    LeftShift,
+    RightShift,
 }
 
 pub struct AstBinaryOperator {
@@ -283,10 +296,16 @@ impl AstBinaryOperator {
 
     pub fn precedence(&self) -> u8 {
         match self.kind {
-            AstBinaryOperatorKind::Plus => 1,
-            AstBinaryOperatorKind::Minus => 1,
-            AstBinaryOperatorKind::Multiply => 2,
-            AstBinaryOperatorKind::Divide => 2,
+            AstBinaryOperatorKind::Power => 20,
+            AstBinaryOperatorKind::Multiply => 19,
+            AstBinaryOperatorKind::Divide => 19,
+            AstBinaryOperatorKind::Plus => 18,
+            AstBinaryOperatorKind::Minus => 18,
+            AstBinaryOperatorKind::LeftShift => 17,
+            AstBinaryOperatorKind::RightShift => 17,
+            AstBinaryOperatorKind::BitwiseAnd => 16,
+            AstBinaryOperatorKind::BitwiseXor => 15,
+            AstBinaryOperatorKind::BitwiseOr => 14,
         }
     }
 }
@@ -316,6 +335,13 @@ impl AstExpression {
 
     pub fn number(number: i64) -> Self {
         AstExpression::new(AstExpressionKind::Number(AstNumberExpression { number }))
+    }
+
+    pub fn unary(operator: AstUnaryOperator, operand: AstExpression) -> Self {
+        AstExpression::new(AstExpressionKind::Unary(AstUnaryExpression {
+            operator,
+            operand: Box::new(operand),
+        }))
     }
 
     pub fn binary(operator: AstBinaryOperator, left: AstExpression, right: AstExpression) -> Self {
@@ -488,8 +514,12 @@ mod test {
 
     #[test]
     pub fn should_parse_parenthesized_binary_expression_with_variable() {
-        let input = "let a = (1 + 2) * b";
+        let input = "\
+        let b = 1
+        let a = (1 + 2) * b";
         let expected = vec![
+            TestAstNode::LetStmt,
+            TestAstNode::Number(1),
             TestAstNode::LetStmt,
             TestAstNode::Binary,
             TestAstNode::Parenthesized,
@@ -504,8 +534,12 @@ mod test {
 
     #[test]
     pub fn should_parse_parenthesized_binary_expression_with_variable_and_number() {
-        let input = "let a = (1 + 2) * b + 3";
+        let input = "\
+        let b = 1
+        let a = (1 + 2) * b + 3";
         let expected = vec![
+            TestAstNode::LetStmt,
+            TestAstNode::Number(1),
             TestAstNode::LetStmt,
             TestAstNode::Binary,
             TestAstNode::Binary,
