@@ -12,7 +12,7 @@ mod source;
 
 fn main() {
     let input = "\
-        let a = (1 + 2) ** 3 >> 1
+        let a = -1 + 2
     ";
 
     let compilation_unit = CompilationUnit::compile(input);

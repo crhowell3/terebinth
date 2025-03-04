@@ -107,7 +107,7 @@ impl Parser {
     fn parse_unary_expression(&mut self) -> AstExpression {
         if let Some(operator) = self.parse_unary_operator() {
             self.consume();
-            let operand = self.parse_expression();
+            let operand = self.parse_primary_expression();
             return AstExpression::unary(operator, operand);
         }
         self.parse_primary_expression()
