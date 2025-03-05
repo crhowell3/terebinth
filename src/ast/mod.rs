@@ -48,6 +48,14 @@ pub enum AstStatementKind {
     Let(AstLetStatement),
     If(AstIfStatement),
     Block(AstBlockStatement),
+    While(AstWhileStatement),
+}
+
+#[derive(Debug, Clone)]
+pub struct AstWhileStatement {
+    pub while_keyword: Token,
+    pub condition: AstExpression,
+    pub body: Box<AstStatement>,
 }
 
 #[derive(Debug, Clone)]
@@ -121,6 +129,18 @@ impl AstStatement {
 
     pub fn block_statement(statements: Vec<AstStatement>) -> Self {
         AstStatement::new(AstStatementKind::Block(AstBlockStatement { statements }))
+    }
+
+    pub fn while_statement(
+        while_keyword: Token,
+        condition: AstExpression,
+        body: AstStatement,
+    ) -> Self {
+        AstStatement::new(AstStatementKind::While(AstWhileStatement {
+            while_keyword,
+            condition,
+            body: Box::new(body),
+        }))
     }
 }
 

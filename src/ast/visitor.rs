@@ -7,6 +7,8 @@ use crate::ast::{
     AstVariableExpression,
 };
 
+use super::AstWhileStatement;
+
 pub trait AstVisitor<'a> {
     fn do_visit_statement(&mut self, statement: &AstStatement) {
         match &statement.kind {
@@ -22,7 +24,15 @@ pub trait AstVisitor<'a> {
             AstStatementKind::Block(stmt) => {
                 self.visit_block_statement(stmt);
             }
+            AstStatementKind::While(stmt) => {
+                self.visit_while_statement(stmt);
+            }
         }
+    }
+
+    fn visit_while_statement(&mut self, while_statement: &AstWhileStatement) {
+        self.visit_expression(&while_statement.condition);
+        self.visit_statement(&while_statement.body);
     }
 
     fn visit_block_statement(&mut self, block_statement: &AstBlockStatement) {

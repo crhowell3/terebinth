@@ -61,6 +61,14 @@ impl AstVisitor<'_> for AstPrinter {
         self.add_boolean_literal(boolean.value);
     }
 
+    fn visit_while_statement(&mut self, while_statement: &AstWhileStatement) {
+        self.add_keyword("while");
+        self.add_whitespace();
+        self.visit_expression(&while_statement.condition);
+        self.add_whitespace();
+        self.visit_statement(&while_statement.body);
+    }
+
     fn visit_if_statement(&mut self, if_statement: &AstIfStatement) {
         self.add_keyword("if");
         self.add_whitespace();

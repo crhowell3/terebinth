@@ -86,6 +86,14 @@ impl AstVisitor<'_> for AstEvaluator {
         });
     }
 
+    fn visit_while_statement(&mut self, while_statement: &super::AstWhileStatement) {
+        self.visit_expression(&while_statement.condition);
+        while self.last_value.unwrap() != 0 {
+            self.visit_statement(&while_statement.body);
+            self.visit_expression(&while_statement.condition);
+        }
+    }
+
     fn visit_let_statement(&mut self, let_statement: &AstLetStatement) {
         self.visit_expression(&let_statement.initializer);
         self.variables.insert(

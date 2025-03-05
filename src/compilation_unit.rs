@@ -65,8 +65,10 @@ struct Resolver {
 
 impl Resolver {
     fn new(diagnostics_list: DiagnosticsListCell) -> Self {
+        let mut scopes = Scopes::new();
+        scopes.enter_scope();
         Self {
-            scopes: Scopes::new(),
+            scopes,
             diagnostics_list,
         }
     }
