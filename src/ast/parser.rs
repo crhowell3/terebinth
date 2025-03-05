@@ -68,8 +68,19 @@ impl Parser {
         match self.current().kind {
             TokenKind::Let => self.parse_let_statement(),
             TokenKind::If => self.parse_if_statement(),
+            TokenKind::OpenBrace => self.parse_block_statement(),
             _ => self.parse_expression_statement(),
         }
+    }
+
+    fn parse_block_statement(&mut self) -> AstStatement {
+        self.consume_and_check(TokenKind::OpenBrace);
+        let mut statements = Vec::new();
+        while self.current().kind != TokenKind::CloseBrace && !self.is_at_end() {
+            statements.push(self.parse_statement());
+        }
+        self.consume_and_check(TokenKind::CloseBrace);
+        AstStatement::block_statement(statements)
     }
 
     fn parse_if_statement(&mut self) -> AstStatement {
@@ -185,6 +196,10 @@ impl Parser {
                 AstExpression::parenthesized(expr)
             }
             TokenKind::Identifier => AstExpression::identifier(token.clone()),
+            TokenKind::True | TokenKind::False => {
+                let value = token.kind == TokenKind::True;
+                AstExpression::boolean(token.clone(), value)
+            }
             _ => {
                 self.diagnostics_list
                     .borrow_mut()

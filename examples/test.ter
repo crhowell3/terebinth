@@ -1,3 +1,8 @@
-let first_number = 1
-let second_number = 4
-let sum = first_number + second_number
+let a = 1
+let b = 2
+if true {
+	a = 10
+} else {
+	a = 5
+}
+a

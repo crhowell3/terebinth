@@ -2,51 +2,109 @@ use std::cell::RefCell;
 use std::collections::HashMap;
 use std::rc::Rc;
 
-use crate::ast::AstVisitor;
 use crate::ast::evaluator::AstEvaluator;
 use crate::ast::lexer::Lexer;
 use crate::ast::parser::Parser;
+use crate::ast::{AstBlockStatement, visitor::AstVisitor};
 use crate::{ast, diagnostics, source};
 use crate::{ast::Ast, diagnostics::DiagnosticsListCell};
 
-struct SymbolChecker {
+struct Scope {
     symbols: HashMap<String, ()>,
+}
+
+impl Scope {
+    fn new() -> Self {
+        Scope {
+            symbols: HashMap::new(),
+        }
+    }
+
+    fn declare(&mut self, identifier: &str) {
+        self.symbols.insert(identifier.to_string(), ());
+    }
+
+    fn lookup(&self, identifier: &str) -> bool {
+        self.symbols.contains_key(identifier)
+    }
+}
+
+struct Scopes {
+    scopes: Vec<Scope>,
+}
+
+impl Scopes {
+    fn new() -> Self {
+        Scopes { scopes: Vec::new() }
+    }
+
+    fn enter_scope(&mut self) {
+        self.scopes.push(Scope::new());
+    }
+
+    fn exit_scope(&mut self) {
+        self.scopes.pop();
+    }
+
+    fn declare(&mut self, identifier: &str) {
+        self.scopes.last_mut().unwrap().declare(identifier);
+    }
+
+    fn lookup(&self, identifier: &str) -> bool {
+        self.scopes
+            .iter()
+            .rev()
+            .any(|scope| scope.lookup(identifier))
+    }
+}
+
+struct Resolver {
+    scopes: Scopes,
     diagnostics_list: DiagnosticsListCell,
 }
 
-impl SymbolChecker {
+impl Resolver {
     fn new(diagnostics_list: DiagnosticsListCell) -> Self {
         Self {
-            symbols: HashMap::new(),
+            scopes: Scopes::new(),
             diagnostics_list,
         }
     }
 }
 
-impl AstVisitor for SymbolChecker {
+impl AstVisitor<'_> for Resolver {
+    fn visit_block_statement(&mut self, block_statement: &AstBlockStatement) {
+        self.scopes.enter_scope();
+        for statement in &block_statement.statements {
+            self.visit_statement(statement);
+        }
+        self.scopes.exit_scope();
+    }
     fn visit_let_statement(&mut self, let_statement: &ast::AstLetStatement) {
         let identifier = let_statement.identifier.span.literal.clone();
         self.visit_expression(&let_statement.initializer);
-        self.symbols.insert(identifier, ());
+        self.scopes.declare(&identifier);
     }
 
     fn visit_variable_expression(&mut self, variable_expression: &ast::AstVariableExpression) {
         if !self
-            .symbols
-            .contains_key(&variable_expression.identifier.span.literal)
+            .scopes
+            .lookup(&variable_expression.identifier.span.literal)
         {
             let mut diagnostics_binding = self.diagnostics_list.borrow_mut();
             diagnostics_binding.report_undeclared_variable(&variable_expression.identifier);
         }
     }
 
-    fn visit_number_expression(&mut self, number: &ast::AstNumberExpression) {}
+    fn visit_number_expression(&mut self, _number: &ast::AstNumberExpression) {}
 
-    fn visit_error(&mut self, span: &ast::lexer::TextSpan) {}
+    fn visit_error(&mut self, _span: &ast::lexer::TextSpan) {}
 
     fn visit_unary_expression(&mut self, unary_expression: &ast::AstUnaryExpression) {
         self.visit_expression(&unary_expression.operand);
     }
+
+    fn visit_boolean_expression(&mut self, boolean: &ast::AstBooleanExpression) {}
 }
 
 pub struct CompilationUnit {
@@ -75,8 +133,8 @@ impl CompilationUnit {
         if Self::check_diagnostics(&text, &diagnostics_list).is_err() {
             return Self::create_compilation_unit(ast, diagnostics_list);
         }
-        let mut symbol_checker = SymbolChecker::new(Rc::clone(&diagnostics_list));
-        ast.visit(&mut symbol_checker);
+        let mut resolver = Resolver::new(Rc::clone(&diagnostics_list));
+        ast.visit(&mut resolver);
         if Self::check_diagnostics(&text, &diagnostics_list).is_err() {
             return Self::create_compilation_unit(ast, diagnostics_list);
         }

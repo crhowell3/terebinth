@@ -2,14 +2,15 @@
 name = "terebinth"
 version = "0.1.0-alpha.0"
 authors = ["Cameron Howell <jango.djarin@proton.me>"]
-description = "An interpreted programming language"
+description = "Lightweight, compiled programming language"
 edition = "2024"
 license = "MIT"
 readme = "README.md"
-repository = "https://github.com/October-Studios/terebinth"
+repository = "https://github.com/crhowell3/terebinth"
 rust-version = "1.85"
 
 [dependencies]
+anyhow = "1.0.97"
 clap = { version = "4.5.31", features = ["derive"] }
 log = "0.4.21"
 termion = "4.0.4"

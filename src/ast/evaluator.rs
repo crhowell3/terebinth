@@ -32,7 +32,7 @@ impl AstEvaluator {
     }
 }
 
-impl AstVisitor for AstEvaluator {
+impl AstVisitor<'_> for AstEvaluator {
     fn visit_if_statement(&mut self, if_statement: &AstIfStatement) {
         self.visit_expression(&if_statement.condition);
         if self.last_value.unwrap() != 0 {
@@ -118,5 +118,9 @@ impl AstVisitor for AstEvaluator {
         self.visit_expression(&assignment_expression.expression);
         self.variables
             .insert(identifier.clone(), self.last_value.unwrap());
+    }
+
+    fn visit_boolean_expression(&mut self, boolean: &super::AstBooleanExpression) {
+        self.last_value = Some(boolean.value as i64);
     }
 }
