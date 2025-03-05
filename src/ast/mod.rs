@@ -47,6 +47,17 @@ pub trait AstVisitor {
             AstStatementKind::LetStatement(expr) => {
                 self.visit_let_statement(expr);
             }
+            AstStatementKind::IfStatement(expr) => {
+                self.visit_if_statement(expr);
+            }
+        }
+    }
+
+    fn visit_if_statement(&mut self, if_statement: &AstIfStatement) {
+        self.visit_expression(&if_statement.condition);
+        self.visit_statement(&if_statement.then_branch);
+        if let Some(else_branch) = &if_statement.else_branch {
+            self.visit_statement(&else_branch.else_statement);
         }
     }
 
@@ -76,11 +87,18 @@ pub trait AstVisitor {
             AstExpressionKind::Unary(expr) => {
                 self.visit_unary_expression(expr);
             }
+            AstExpressionKind::Assignment(expr) => {
+                self.visit_assignment_expression(expr);
+            }
         }
     }
 
     fn visit_expression(&mut self, expression: &AstExpression) {
         self.do_visit_expression(expression);
+    }
+
+    fn visit_assignment_expression(&mut self, assignment_expression: &AstAssignmentExpression) {
+        self.visit_expression(&assignment_expression.expression);
     }
 
     fn visit_variable_expression(&mut self, variable_expression: &AstVariableExpression);
@@ -123,6 +141,21 @@ impl AstPrinter {
         self.result.push('\n');
     }
 
+    fn add_keyword(&mut self, keyword: &str) {
+        self.result
+            .push_str(&format!("{}{}", Self::KEYWORD_COLOR.fg_str(), keyword));
+    }
+
+    fn add_text(&mut self, text: &str) {
+        self.result
+            .push_str(&format!("{}{}", Self::TEXT_COLOR.fg_str(), text));
+    }
+
+    fn add_variable(&mut self, variable: &str) {
+        self.result
+            .push_str(&format!("{}{}", Self::VARIABLE_COLOR.fg_str(), variable));
+    }
+
     pub fn new() -> Self {
         Self {
             indent: 0,
@@ -132,20 +165,36 @@ impl AstPrinter {
 }
 
 impl AstVisitor for AstPrinter {
+    fn visit_if_statement(&mut self, if_statement: &AstIfStatement) {
+        self.add_keyword("if");
+        self.add_whitespace();
+        self.visit_expression(&if_statement.condition);
+        self.add_whitespace();
+        self.visit_statement(&if_statement.then_branch);
+        if let Some(else_branch) = &if_statement.else_branch {
+            self.add_whitespace();
+            self.add_keyword("else");
+            self.add_whitespace();
+            self.visit_statement(&else_branch.else_statement);
+        }
+    }
+
     fn visit_let_statement(&mut self, let_statement: &AstLetStatement) {
-        self.result
-            .push_str(&format!("{}let", Self::KEYWORD_COLOR.fg_str()));
+        self.add_keyword("let");
         self.add_whitespace();
-        self.result.push_str(&format!(
-            "{}{}",
-            Self::TEXT_COLOR.fg_str(),
-            let_statement.identifier.span.literal
-        ));
+        self.add_text(let_statement.identifier.span.literal.as_str());
         self.add_whitespace();
-        self.result
-            .push_str(&format!("{}=", Self::TEXT_COLOR.fg_str()));
+        self.add_text("=");
         self.add_whitespace();
         self.visit_expression(&let_statement.initializer);
+    }
+
+    fn visit_assignment_expression(&mut self, assignment_expression: &AstAssignmentExpression) {
+        self.add_variable(assignment_expression.identifier.span.literal.as_str());
+        self.add_whitespace();
+        self.add_text("=");
+        self.add_whitespace();
+        self.visit_expression(&assignment_expression.expression);
     }
 
     fn visit_statement(&mut self, statement: &AstStatement) {
@@ -207,6 +256,28 @@ impl AstVisitor for AstPrinter {
 pub enum AstStatementKind {
     Expression(AstExpression),
     LetStatement(AstLetStatement),
+    IfStatement(AstIfStatement),
+}
+
+pub struct AstElseStatement {
+    pub else_keyword: Token,
+    pub else_statement: Box<AstStatement>,
+}
+
+impl AstElseStatement {
+    pub fn new(else_keyword: Token, else_statement: AstStatement) -> Self {
+        AstElseStatement {
+            else_keyword,
+            else_statement: Box::new(else_statement),
+        }
+    }
+}
+
+pub struct AstIfStatement {
+    pub if_keyword: Token,
+    pub condition: AstExpression,
+    pub then_branch: Box<AstStatement>,
+    pub else_branch: Option<AstElseStatement>,
 }
 
 pub struct AstLetStatement {
@@ -233,6 +304,20 @@ impl AstStatement {
             initializer,
         }))
     }
+
+    pub fn if_statement(
+        if_keyword: Token,
+        condition: AstExpression,
+        then: AstStatement,
+        else_statement: Option<AstElseStatement>,
+    ) -> Self {
+        AstStatement::new(AstStatementKind::IfStatement(AstIfStatement {
+            if_keyword,
+            condition,
+            then_branch: Box::new(then),
+            else_branch: else_statement,
+        }))
+    }
 }
 
 pub enum AstExpressionKind {
@@ -241,7 +326,13 @@ pub enum AstExpressionKind {
     Unary(AstUnaryExpression),
     Parenthesized(AstParenthesizedExpression),
     Variable(AstVariableExpression),
+    Assignment(AstAssignmentExpression),
     Error(TextSpan),
+}
+
+pub struct AstAssignmentExpression {
+    pub identifier: Token,
+    pub expression: Box<AstExpression>,
 }
 
 pub enum AstUnaryOperatorKind {
@@ -282,6 +373,12 @@ pub enum AstBinaryOperatorKind {
     BitwiseXor,
     LeftShift,
     RightShift,
+    Equals,
+    NotEquals,
+    LessThan,
+    LessThanOrEqual,
+    GreaterThan,
+    GreaterThanOrEqual,
 }
 
 pub struct AstBinaryOperator {
@@ -296,6 +393,12 @@ impl AstBinaryOperator {
 
     pub fn precedence(&self) -> u8 {
         match self.kind {
+            AstBinaryOperatorKind::Equals => 30,
+            AstBinaryOperatorKind::NotEquals => 30,
+            AstBinaryOperatorKind::LessThan => 29,
+            AstBinaryOperatorKind::LessThanOrEqual => 29,
+            AstBinaryOperatorKind::GreaterThan => 29,
+            AstBinaryOperatorKind::GreaterThanOrEqual => 29,
             AstBinaryOperatorKind::Power => 20,
             AstBinaryOperatorKind::Multiply => 19,
             AstBinaryOperatorKind::Divide => 19,
@@ -363,6 +466,13 @@ impl AstExpression {
     pub fn identifier(identifier: Token) -> Self {
         AstExpression::new(AstExpressionKind::Variable(AstVariableExpression {
             identifier,
+        }))
+    }
+
+    pub fn assignment(identifier: Token, expression: AstExpression) -> Self {
+        AstExpression::new(AstExpressionKind::Assignment(AstAssignmentExpression {
+            identifier,
+            expression: Box::new(expression),
         }))
     }
 

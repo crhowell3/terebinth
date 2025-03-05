@@ -12,7 +12,14 @@ mod source;
 
 fn main() {
     let input = "\
-        let a = -1 + 2
+        let a = 0
+        let b = 1
+        if b > a
+            a = 10
+        else
+            a = 5
+        
+        a
     ";
 
     let compilation_unit = CompilationUnit::compile(input);

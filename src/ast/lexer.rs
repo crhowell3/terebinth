@@ -22,11 +22,28 @@ pub enum TokenKind {
     Tilde,
     DoubleLessThan,
     DoubleGreaterThan,
+    EqualsEquals,
+    BangEquals,
+    LessThan,
+    LessThanEquals,
+    GreaterThan,
+    GreaterThanEquals,
     // Keywords
     Let,
-    // Other
+    If,
+    Else,
+    True,
+    False,
+    While,
+    Func,
+    Return,
+    // Separators
     LeftParen,
     RightParen,
+    OpenBrace,
+    CloseBrace,
+    Comma,
+    // Other
     Semicolon,
     Whitespace,
     Identifier,
@@ -58,6 +75,22 @@ impl Display for TokenKind {
             TokenKind::Tilde => write!(f, "~"),
             TokenKind::DoubleLessThan => write!(f, "<<"),
             TokenKind::DoubleGreaterThan => write!(f, ">>"),
+            TokenKind::If => write!(f, "If"),
+            TokenKind::Else => write!(f, "Else"),
+            TokenKind::GreaterThan => write!(f, ">"),
+            TokenKind::LessThan => write!(f, "<"),
+            TokenKind::GreaterThanEquals => write!(f, ">="),
+            TokenKind::LessThanEquals => write!(f, "<="),
+            TokenKind::EqualsEquals => write!(f, "=="),
+            TokenKind::BangEquals => write!(f, "!="),
+            TokenKind::OpenBrace => write!(f, "{{"),
+            TokenKind::CloseBrace => write!(f, "}}"),
+            TokenKind::True => write!(f, "True"),
+            TokenKind::False => write!(f, "False"),
+            TokenKind::While => write!(f, "While"),
+            TokenKind::Func => write!(f, "Func"),
+            TokenKind::Return => write!(f, "Return"),
+            TokenKind::Comma => write!(f, "Comma"),
         }
     }
 }
@@ -130,6 +163,13 @@ impl<'a> Lexer<'a> {
                 let identifier = self.consume_identifier();
                 kind = match identifier.as_str() {
                     "let" => TokenKind::Let,
+                    "if" => TokenKind::If,
+                    "else" => TokenKind::Else,
+                    "true" => TokenKind::True,
+                    "false" => TokenKind::False,
+                    "while" => TokenKind::While,
+                    "func" => TokenKind::Func,
+                    "return" => TokenKind::Return,
                     _ => TokenKind::Identifier,
                 }
             } else {
@@ -147,52 +187,61 @@ impl<'a> Lexer<'a> {
         match c {
             '+' => TokenKind::Plus,
             '-' => TokenKind::Minus,
-            '*' => {
-                if let Some(next) = self.current_char() {
-                    if next == '*' {
-                        self.consume();
-                        TokenKind::DoubleAsterisk
-                    } else {
-                        TokenKind::Asterisk
-                    }
-                } else {
-                    TokenKind::Asterisk
-                }
-            }
+            '*' => self.lex_potential_double_char_operator(
+                '*',
+                TokenKind::Asterisk,
+                TokenKind::DoubleAsterisk,
+            ),
             '/' => TokenKind::Slash,
             '(' => TokenKind::LeftParen,
             ')' => TokenKind::RightParen,
-            '=' => TokenKind::Equals,
+            '=' => self.lex_potential_double_char_operator(
+                '=',
+                TokenKind::Equals,
+                TokenKind::EqualsEquals,
+            ),
             ';' => TokenKind::Semicolon,
             '&' => TokenKind::Ampersand,
             '|' => TokenKind::Pipe,
             '^' => TokenKind::Caret,
             '~' => TokenKind::Tilde,
-            '<' => {
-                if let Some(next) = self.current_char() {
-                    if next == '<' {
-                        self.consume();
-                        TokenKind::DoubleLessThan
-                    } else {
-                        TokenKind::Invalid
-                    }
-                } else {
-                    TokenKind::Invalid
-                }
-            }
-            '>' => {
-                if let Some(next) = self.current_char() {
-                    if next == '>' {
-                        self.consume();
-                        TokenKind::DoubleGreaterThan
-                    } else {
-                        TokenKind::Invalid
-                    }
-                } else {
-                    TokenKind::Invalid
-                }
-            }
+            '<' => self.lex_potential_double_char_operator(
+                '=',
+                TokenKind::LessThan,
+                TokenKind::LessThanEquals,
+            ),
+            '>' => self.lex_potential_double_char_operator(
+                '=',
+                TokenKind::GreaterThan,
+                TokenKind::GreaterThanEquals,
+            ),
+            '!' => self.lex_potential_double_char_operator(
+                '=',
+                TokenKind::Invalid,
+                TokenKind::BangEquals,
+            ),
+            '{' => TokenKind::OpenBrace,
+            '}' => TokenKind::CloseBrace,
+            ',' => TokenKind::Comma,
             _ => TokenKind::Invalid,
+        }
+    }
+
+    fn lex_potential_double_char_operator(
+        &mut self,
+        expected: char,
+        one_char_kind: TokenKind,
+        double_char_kind: TokenKind,
+    ) -> TokenKind {
+        if let Some(next) = self.current_char() {
+            if next == expected {
+                self.consume();
+                double_char_kind
+            } else {
+                one_char_kind
+            }
+        } else {
+            one_char_kind
         }
     }
 
