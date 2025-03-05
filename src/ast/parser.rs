@@ -8,8 +8,8 @@ use std::cell::Cell;
 use crate::diagnostics::DiagnosticsListCell;
 
 use super::{
-    AstBinaryOperator, AstBinaryOperatorKind, AstElseStatement, AstExpression, AstStatement,
-    AstUnaryOperator, AstUnaryOperatorKind,
+    AstBinaryOperator, AstBinaryOperatorKind, AstElseStatement, AstExpression,
+    AstFuncDeclParameter, AstStatement, AstUnaryOperator, AstUnaryOperatorKind,
     lexer::{Token, TokenKind},
 };
 
@@ -70,8 +70,41 @@ impl Parser {
             TokenKind::If => self.parse_if_statement(),
             TokenKind::OpenBrace => self.parse_block_statement(),
             TokenKind::While => self.parse_while_statement(),
+            TokenKind::Func => self.parse_function_declaration(),
+            TokenKind::Return => self.parse_return_statement(),
             _ => self.parse_expression_statement(),
         }
+    }
+
+    fn parse_function_declaration(&mut self) -> AstStatement {
+        self.consume_and_check(TokenKind::Func);
+        let identifier = self.consume_and_check(TokenKind::Identifier).clone();
+        let parameters = self.parse_optional_parameter_list();
+        let body = self.parse_block_statement();
+        AstStatement::func_decl_statement(identifier, parameters, body)
+    }
+
+    fn parse_optional_parameter_list(&mut self) -> Vec<AstFuncDeclParameter> {
+        if self.current().kind != TokenKind::LeftParen {
+            return Vec::new();
+        }
+        self.consume_and_check(TokenKind::LeftParen);
+        let mut parameters = Vec::new();
+        while self.current().kind != TokenKind::RightParen && !self.is_at_end() {
+            parameters.push(AstFuncDeclParameter {
+                identifier: self.consume_and_check(TokenKind::Identifier).clone(),
+            });
+            if self.current().kind == TokenKind::Comma {
+                self.consume_and_check(TokenKind::Comma);
+            }
+        }
+        parameters
+    }
+
+    fn parse_return_statement(&mut self) -> AstStatement {
+        let return_keyword = self.consume_and_check(TokenKind::Return).clone();
+        let expression = self.parse_expression();
+        AstStatement::return_statement(return_keyword, Some(expression))
     }
 
     fn parse_while_statement(&mut self) -> AstStatement {

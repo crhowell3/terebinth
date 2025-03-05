@@ -49,6 +49,26 @@ pub enum AstStatementKind {
     If(AstIfStatement),
     Block(AstBlockStatement),
     While(AstWhileStatement),
+    FuncDecl(AstFuncDeclStatement),
+    Return(AstReturnStatement),
+}
+
+#[derive(Debug, Clone)]
+pub struct AstReturnStatement {
+    pub return_keyword: Token,
+    pub return_value: Option<AstExpression>,
+}
+
+#[derive(Debug, Clone)]
+pub struct AstFuncDeclParameter {
+    pub identifier: Token,
+}
+
+#[derive(Debug, Clone)]
+pub struct AstFuncDeclStatement {
+    pub identifier: Token,
+    pub parameters: Vec<AstFuncDeclParameter>,
+    pub body: Box<AstStatement>,
 }
 
 #[derive(Debug, Clone)]
@@ -139,6 +159,25 @@ impl AstStatement {
         AstStatement::new(AstStatementKind::While(AstWhileStatement {
             while_keyword,
             condition,
+            body: Box::new(body),
+        }))
+    }
+
+    pub fn return_statement(return_keyword: Token, return_value: Option<AstExpression>) -> Self {
+        AstStatement::new(AstStatementKind::Return(AstReturnStatement {
+            return_keyword,
+            return_value,
+        }))
+    }
+
+    pub fn func_decl_statement(
+        identifier: Token,
+        parameters: Vec<AstFuncDeclParameter>,
+        body: AstStatement,
+    ) -> Self {
+        AstStatement::new(AstStatementKind::FuncDecl(AstFuncDeclStatement {
+            identifier,
+            parameters,
             body: Box::new(body),
         }))
     }

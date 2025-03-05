@@ -7,7 +7,7 @@ use crate::ast::{
     AstVariableExpression,
 };
 
-use super::AstWhileStatement;
+use super::{AstFuncDeclParameter, AstFuncDeclStatement, AstReturnStatement, AstWhileStatement};
 
 pub trait AstVisitor<'a> {
     fn do_visit_statement(&mut self, statement: &AstStatement) {
@@ -27,6 +27,22 @@ pub trait AstVisitor<'a> {
             AstStatementKind::While(stmt) => {
                 self.visit_while_statement(stmt);
             }
+            AstStatementKind::FuncDecl(stmt) => {
+                self.visit_func_decl_statement(stmt);
+            }
+            AstStatementKind::Return(stmt) => {
+                self.visit_return_statement(stmt);
+            }
+        }
+    }
+
+    fn visit_func_decl_statement(&mut self, func_decl_statement: &AstFuncDeclStatement) {
+        self.visit_statement(&func_decl_statement.body);
+    }
+
+    fn visit_return_statement(&mut self, return_statement: &AstReturnStatement) {
+        if let Some(expr) = &return_statement.return_value {
+            self.visit_expression(expr);
         }
     }
 
