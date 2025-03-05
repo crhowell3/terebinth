@@ -4,8 +4,7 @@ on:
   push:
     branches: [ "main" ]
   pull_request:
-  workflow_dispatch:
-  schedule: [cron: "20 17 * * 5"]
+    branches: [ "main" ]
 
 permissions:
   contents: read
@@ -16,7 +15,7 @@ env:
 jobs:
   test:
     name: Tests
-    runs-on: self-hosted
+    runs-on: ubuntu-latest
     timeout-minutes: 45
     steps:
       - uses: actions/checkout@v4
@@ -25,7 +24,7 @@ jobs:
   
   stable:
     name: Rust ${{matrix.rust}}
-    runs-on: self-hosted
+    runs-on: ubuntu-latest
     strategy:
       fail-fast: false
       matrix:
@@ -40,7 +39,7 @@ jobs:
 
   nightly:
     name: Rust nightly
-    runs-on: self-hosted
+    runs-on: ubuntu-latest
     strategy:
       fail-fast: false
     timeout-minutes: 45
@@ -52,7 +51,7 @@ jobs:
   
   doc:
     name: Documentation
-    runs-on: self-hosted
+    runs-on: ubuntu-latest
     timeout-minutes: 45
     env:
       RUSTDOCFLAGS: -Dwarnings
@@ -65,7 +64,7 @@ jobs:
       
   clippy:
     name: Clippy
-    runs-on: self-hosted
+    runs-on: ubuntu-latest
     permissions: write-all
     if: github.event_name != 'pull_request'
     timeout-minutes: 45
@@ -85,7 +84,7 @@ jobs:
 
   miri:
     name: Miri
-    runs-on: self-hosted
+    runs-on: ubuntu-latest
     timeout-minutes: 45
     steps:
       - uses: actions/checkout@v4

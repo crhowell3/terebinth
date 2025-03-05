@@ -8,8 +8,8 @@ use std::cell::Cell;
 use crate::diagnostics::DiagnosticsListCell;
 
 use super::{
-    AstBinaryOperator, AstBinaryOperatorKind, AstExpression, AstStatement, AstUnaryOperator,
-    AstUnaryOperatorKind,
+    AstBinaryOperator, AstBinaryOperatorKind, AstElseStatement, AstExpression, AstStatement,
+    AstUnaryOperator, AstUnaryOperatorKind,
     lexer::{Token, TokenKind},
 };
 
@@ -67,13 +67,45 @@ impl Parser {
     fn parse_statement(&mut self) -> AstStatement {
         match self.current().kind {
             TokenKind::Let => self.parse_let_statement(),
+            TokenKind::If => self.parse_if_statement(),
+            TokenKind::OpenBrace => self.parse_block_statement(),
+            TokenKind::While => self.parse_while_statement(),
             _ => self.parse_expression_statement(),
         }
     }
 
-    fn parse_expression_statement(&mut self) -> AstStatement {
-        let expr = self.parse_expression();
-        AstStatement::expression(expr)
+    fn parse_while_statement(&mut self) -> AstStatement {
+        let while_keyword = self.consume_and_check(TokenKind::While).clone();
+        let condition_expr = self.parse_expression();
+        let body = self.parse_statement();
+        AstStatement::while_statement(while_keyword, condition_expr, body)
+    }
+
+    fn parse_block_statement(&mut self) -> AstStatement {
+        self.consume_and_check(TokenKind::OpenBrace);
+        let mut statements = Vec::new();
+        while self.current().kind != TokenKind::CloseBrace && !self.is_at_end() {
+            statements.push(self.parse_statement());
+        }
+        self.consume_and_check(TokenKind::CloseBrace);
+        AstStatement::block_statement(statements)
+    }
+
+    fn parse_if_statement(&mut self) -> AstStatement {
+        let if_keyword = self.consume_and_check(TokenKind::If).clone();
+        let condition_expr = self.parse_expression();
+        let then = self.parse_statement();
+        let else_statement = self.parse_optional_else_statement();
+        AstStatement::if_statement(if_keyword, condition_expr, then, else_statement)
+    }
+
+    fn parse_optional_else_statement(&mut self) -> Option<AstElseStatement> {
+        if self.current().kind == TokenKind::Else {
+            let else_keyword = self.consume_and_check(TokenKind::Else).clone();
+            let else_statement = self.parse_statement();
+            return Some(AstElseStatement::new(else_keyword, else_statement));
+        }
+        None
     }
 
     fn parse_let_statement(&mut self) -> AstStatement {
@@ -84,7 +116,22 @@ impl Parser {
         AstStatement::let_statement(identifier.clone(), expr)
     }
 
+    fn parse_expression_statement(&mut self) -> AstStatement {
+        let expr = self.parse_expression();
+        AstStatement::expression(expr)
+    }
+
     fn parse_expression(&mut self) -> AstExpression {
+        self.parse_assignment_expression()
+    }
+
+    fn parse_assignment_expression(&mut self) -> AstExpression {
+        if self.current().kind == TokenKind::Identifier && self.peek(1).kind == TokenKind::Equals {
+            let identifier = self.consume_and_check(TokenKind::Identifier).clone();
+            self.consume_and_check(TokenKind::Equals);
+            let expr = self.parse_expression();
+            return AstExpression::assignment(identifier, expr);
+        }
         self.parse_binary_expression(0)
     }
 
@@ -136,6 +183,12 @@ impl Parser {
             TokenKind::DoubleAsterisk => Some(AstBinaryOperatorKind::Power),
             TokenKind::DoubleLessThan => Some(AstBinaryOperatorKind::LeftShift),
             TokenKind::DoubleGreaterThan => Some(AstBinaryOperatorKind::RightShift),
+            TokenKind::EqualsEquals => Some(AstBinaryOperatorKind::Equals),
+            TokenKind::BangEquals => Some(AstBinaryOperatorKind::NotEquals),
+            TokenKind::LessThan => Some(AstBinaryOperatorKind::LessThan),
+            TokenKind::LessThanEquals => Some(AstBinaryOperatorKind::LessThanOrEqual),
+            TokenKind::GreaterThan => Some(AstBinaryOperatorKind::GreaterThan),
+            TokenKind::GreaterThanEquals => Some(AstBinaryOperatorKind::GreaterThanOrEqual),
             _ => None,
         };
         kind.map(|kind| AstBinaryOperator::new(kind, token.clone()))
@@ -151,6 +204,10 @@ impl Parser {
                 AstExpression::parenthesized(expr)
             }
             TokenKind::Identifier => AstExpression::identifier(token.clone()),
+            TokenKind::True | TokenKind::False => {
+                let value = token.kind == TokenKind::True;
+                AstExpression::boolean(token.clone(), value)
+            }
             _ => {
                 self.diagnostics_list
                     .borrow_mut()

@@ -3,12 +3,16 @@
 //
 //     Licensed under the MIT License
 
-use lexer::{TextSpan, Token};
-use termion::color::{self, Fg, Reset};
+use crate::ast::lexer::{TextSpan, Token};
+use printer::AstPrinter;
+use termion::color::{Fg, Reset};
+use visitor::AstVisitor;
 
 pub mod evaluator;
 pub mod lexer;
 pub mod parser;
+pub mod printer;
+pub mod visitor;
 
 pub struct Ast {
     pub statements: Vec<AstStatement>,
@@ -38,182 +42,57 @@ impl Ast {
     }
 }
 
-pub trait AstVisitor {
-    fn do_visit_statement(&mut self, statement: &AstStatement) {
-        match &statement.kind {
-            AstStatementKind::Expression(expr) => {
-                self.visit_expression(expr);
-            }
-            AstStatementKind::LetStatement(expr) => {
-                self.visit_let_statement(expr);
-            }
-        }
-    }
-
-    fn visit_let_statement(&mut self, let_statement: &AstLetStatement);
-
-    fn visit_statement(&mut self, statement: &AstStatement) {
-        self.do_visit_statement(statement);
-    }
-
-    fn do_visit_expression(&mut self, expression: &AstExpression) {
-        match &expression.kind {
-            AstExpressionKind::Number(number) => {
-                self.visit_number_expression(number);
-            }
-            AstExpressionKind::Binary(expr) => {
-                self.visit_binary_expression(expr);
-            }
-            AstExpressionKind::Parenthesized(expr) => {
-                self.visit_parenthesized_expression(expr);
-            }
-            AstExpressionKind::Error(span) => {
-                self.visit_error(span);
-            }
-            AstExpressionKind::Variable(expr) => {
-                self.visit_variable_expression(expr);
-            }
-            AstExpressionKind::Unary(expr) => {
-                self.visit_unary_expression(expr);
-            }
-        }
-    }
-
-    fn visit_expression(&mut self, expression: &AstExpression) {
-        self.do_visit_expression(expression);
-    }
-
-    fn visit_variable_expression(&mut self, variable_expression: &AstVariableExpression);
-
-    fn visit_number_expression(&mut self, number: &AstNumberExpression);
-
-    fn visit_error(&mut self, span: &TextSpan);
-
-    fn visit_unary_expression(&mut self, unary_expression: &AstUnaryExpression);
-
-    fn visit_binary_expression(&mut self, binary_expression: &AstBinaryExpression) {
-        self.visit_expression(&binary_expression.left);
-        self.visit_expression(&binary_expression.right);
-    }
-
-    fn visit_parenthesized_expression(
-        &mut self,
-        parenthesized_expression: &AstParenthesizedExpression,
-    ) {
-        self.visit_expression(&parenthesized_expression.expression);
-    }
-}
-
-pub struct AstPrinter {
-    indent: usize,
-    result: String,
-}
-
-impl AstPrinter {
-    const NUMBER_COLOR: color::Magenta = color::Magenta;
-    const TEXT_COLOR: color::LightWhite = color::LightWhite;
-    const KEYWORD_COLOR: color::Blue = color::Blue;
-    const VARIABLE_COLOR: color::Green = color::Green;
-
-    fn add_whitespace(&mut self) {
-        self.result.push(' ');
-    }
-
-    fn add_newline(&mut self) {
-        self.result.push('\n');
-    }
-
-    pub fn new() -> Self {
-        Self {
-            indent: 0,
-            result: String::new(),
-        }
-    }
-}
-
-impl AstVisitor for AstPrinter {
-    fn visit_let_statement(&mut self, let_statement: &AstLetStatement) {
-        self.result
-            .push_str(&format!("{}let", Self::KEYWORD_COLOR.fg_str()));
-        self.add_whitespace();
-        self.result.push_str(&format!(
-            "{}{}",
-            Self::TEXT_COLOR.fg_str(),
-            let_statement.identifier.span.literal
-        ));
-        self.add_whitespace();
-        self.result
-            .push_str(&format!("{}=", Self::TEXT_COLOR.fg_str()));
-        self.add_whitespace();
-        self.visit_expression(&let_statement.initializer);
-    }
-
-    fn visit_statement(&mut self, statement: &AstStatement) {
-        Self::do_visit_statement(self, statement);
-        self.result.push_str(&format!("{}\n", Fg(Reset)));
-    }
-
-    fn visit_number_expression(&mut self, number: &AstNumberExpression) {
-        self.result
-            .push_str(&format!("{}{}", Self::NUMBER_COLOR.fg_str(), number.number));
-    }
-
-    fn visit_error(&mut self, span: &TextSpan) {
-        self.result
-            .push_str(&format!("{}{}", Self::TEXT_COLOR.fg_str(), span.literal));
-    }
-
-    fn visit_unary_expression(&mut self, unary_expression: &AstUnaryExpression) {
-        self.result.push_str(&format!(
-            "{}{}",
-            Self::TEXT_COLOR.fg_str(),
-            unary_expression.operator.token.span.literal
-        ));
-        self.visit_expression(&unary_expression.operand);
-    }
-
-    fn visit_binary_expression(&mut self, binary_expression: &AstBinaryExpression) {
-        self.visit_expression(&binary_expression.left);
-        self.add_whitespace();
-        self.result.push_str(&format!(
-            "{}{}",
-            Self::TEXT_COLOR.fg_str(),
-            binary_expression.operator.token.span.literal
-        ));
-        self.add_whitespace();
-        self.visit_expression(&binary_expression.right);
-    }
-
-    fn visit_parenthesized_expression(
-        &mut self,
-        parenthesized_expression: &AstParenthesizedExpression,
-    ) {
-        self.result
-            .push_str(&format!("{}{}", Self::TEXT_COLOR.fg_str(), "("));
-        self.visit_expression(&parenthesized_expression.expression);
-        self.result
-            .push_str(&format!("{}{}", Self::TEXT_COLOR.fg_str(), ")"));
-    }
-
-    fn visit_variable_expression(&mut self, variable_expression: &AstVariableExpression) {
-        self.result.push_str(&format!(
-            "{}{}",
-            Self::VARIABLE_COLOR.fg_str(),
-            variable_expression.identifier.span.literal
-        ));
-    }
-}
-
+#[derive(Debug, Clone)]
 pub enum AstStatementKind {
     Expression(AstExpression),
-    LetStatement(AstLetStatement),
+    Let(AstLetStatement),
+    If(AstIfStatement),
+    Block(AstBlockStatement),
+    While(AstWhileStatement),
 }
 
+#[derive(Debug, Clone)]
+pub struct AstWhileStatement {
+    pub while_keyword: Token,
+    pub condition: AstExpression,
+    pub body: Box<AstStatement>,
+}
+
+#[derive(Debug, Clone)]
+pub struct AstBlockStatement {
+    pub statements: Vec<AstStatement>,
+}
+
+#[derive(Debug, Clone)]
+pub struct AstElseStatement {
+    pub else_keyword: Token,
+    pub else_statement: Box<AstStatement>,
+}
+
+impl AstElseStatement {
+    pub fn new(else_keyword: Token, else_statement: AstStatement) -> Self {
+        AstElseStatement {
+            else_keyword,
+            else_statement: Box::new(else_statement),
+        }
+    }
+}
+
+#[derive(Debug, Clone)]
+pub struct AstIfStatement {
+    pub if_keyword: Token,
+    pub condition: AstExpression,
+    pub then_branch: Box<AstStatement>,
+    pub else_branch: Option<AstElseStatement>,
+}
+
+#[derive(Debug, Clone)]
 pub struct AstLetStatement {
     pub identifier: Token,
     pub initializer: AstExpression,
 }
 
+#[derive(Debug, Clone)]
 pub struct AstStatement {
     kind: AstStatementKind,
 }
@@ -228,27 +107,74 @@ impl AstStatement {
     }
 
     pub fn let_statement(identifier: Token, initializer: AstExpression) -> Self {
-        AstStatement::new(AstStatementKind::LetStatement(AstLetStatement {
+        AstStatement::new(AstStatementKind::Let(AstLetStatement {
             identifier,
             initializer,
         }))
     }
+
+    pub fn if_statement(
+        if_keyword: Token,
+        condition: AstExpression,
+        then: AstStatement,
+        else_statement: Option<AstElseStatement>,
+    ) -> Self {
+        AstStatement::new(AstStatementKind::If(AstIfStatement {
+            if_keyword,
+            condition,
+            then_branch: Box::new(then),
+            else_branch: else_statement,
+        }))
+    }
+
+    pub fn block_statement(statements: Vec<AstStatement>) -> Self {
+        AstStatement::new(AstStatementKind::Block(AstBlockStatement { statements }))
+    }
+
+    pub fn while_statement(
+        while_keyword: Token,
+        condition: AstExpression,
+        body: AstStatement,
+    ) -> Self {
+        AstStatement::new(AstStatementKind::While(AstWhileStatement {
+            while_keyword,
+            condition,
+            body: Box::new(body),
+        }))
+    }
 }
 
+#[derive(Debug, Clone)]
 pub enum AstExpressionKind {
     Number(AstNumberExpression),
     Binary(AstBinaryExpression),
     Unary(AstUnaryExpression),
     Parenthesized(AstParenthesizedExpression),
     Variable(AstVariableExpression),
+    Assignment(AstAssignmentExpression),
+    Boolean(AstBooleanExpression),
     Error(TextSpan),
 }
 
+#[derive(Debug, Clone)]
+pub struct AstBooleanExpression {
+    pub value: bool,
+    pub token: Token,
+}
+
+#[derive(Debug, Clone)]
+pub struct AstAssignmentExpression {
+    pub identifier: Token,
+    pub expression: Box<AstExpression>,
+}
+
+#[derive(Debug, Clone)]
 pub enum AstUnaryOperatorKind {
     Minus,
     BitwiseNot,
 }
 
+#[derive(Debug, Clone)]
 pub struct AstUnaryOperator {
     kind: AstUnaryOperatorKind,
     token: Token,
@@ -260,17 +186,18 @@ impl AstUnaryOperator {
     }
 }
 
+#[derive(Debug, Clone)]
 pub struct AstUnaryExpression {
     pub operator: AstUnaryOperator,
     pub operand: Box<AstExpression>,
 }
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub struct AstVariableExpression {
     pub identifier: Token,
 }
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub enum AstBinaryOperatorKind {
     Plus,
     Minus,
@@ -282,8 +209,15 @@ pub enum AstBinaryOperatorKind {
     BitwiseXor,
     LeftShift,
     RightShift,
+    Equals,
+    NotEquals,
+    LessThan,
+    LessThanOrEqual,
+    GreaterThan,
+    GreaterThanOrEqual,
 }
 
+#[derive(Debug, Clone)]
 pub struct AstBinaryOperator {
     kind: AstBinaryOperatorKind,
     token: Token,
@@ -296,6 +230,12 @@ impl AstBinaryOperator {
 
     pub fn precedence(&self) -> u8 {
         match self.kind {
+            AstBinaryOperatorKind::Equals => 30,
+            AstBinaryOperatorKind::NotEquals => 30,
+            AstBinaryOperatorKind::LessThan => 29,
+            AstBinaryOperatorKind::LessThanOrEqual => 29,
+            AstBinaryOperatorKind::GreaterThan => 29,
+            AstBinaryOperatorKind::GreaterThanOrEqual => 29,
             AstBinaryOperatorKind::Power => 20,
             AstBinaryOperatorKind::Multiply => 19,
             AstBinaryOperatorKind::Divide => 19,
@@ -310,20 +250,24 @@ impl AstBinaryOperator {
     }
 }
 
+#[derive(Debug, Clone)]
 pub struct AstBinaryExpression {
     left: Box<AstExpression>,
     operator: AstBinaryOperator,
     right: Box<AstExpression>,
 }
 
+#[derive(Debug, Clone)]
 pub struct AstNumberExpression {
     number: i64,
 }
 
+#[derive(Debug, Clone)]
 pub struct AstParenthesizedExpression {
     expression: Box<AstExpression>,
 }
 
+#[derive(Debug, Clone)]
 pub struct AstExpression {
     kind: AstExpressionKind,
 }
@@ -366,6 +310,20 @@ impl AstExpression {
         }))
     }
 
+    pub fn assignment(identifier: Token, expression: AstExpression) -> Self {
+        AstExpression::new(AstExpressionKind::Assignment(AstAssignmentExpression {
+            identifier,
+            expression: Box::new(expression),
+        }))
+    }
+
+    pub fn boolean(token: Token, value: bool) -> Self {
+        AstExpression::new(AstExpressionKind::Boolean(AstBooleanExpression {
+            token,
+            value,
+        }))
+    }
+
     pub fn error(span: TextSpan) -> Self {
         AstExpression::new(AstExpressionKind::Error(span))
     }
@@ -380,11 +338,16 @@ mod test {
     #[derive(Debug, PartialEq, Eq)]
     enum TestAstNode {
         Number(i64),
+        Boolean(bool),
         Binary,
         Unary,
         Parenthesized,
-        LetStmt,
+        Let,
+        Assignment,
+        Block,
         Variable(String),
+        If,
+        Else,
     }
 
     struct AstVerifier {
@@ -435,9 +398,9 @@ mod test {
         }
     }
 
-    impl AstVisitor for AstVerifier {
+    impl AstVisitor<'_> for AstVerifier {
         fn visit_let_statement(&mut self, let_statement: &super::AstLetStatement) {
-            self.actual.push(TestAstNode::LetStmt);
+            self.actual.push(TestAstNode::Let);
             self.visit_expression(&let_statement.initializer);
         }
 
@@ -476,6 +439,10 @@ mod test {
             self.visit_expression(&binary_expression.left);
             self.visit_expression(&binary_expression.right);
         }
+
+        fn visit_boolean_expression(&mut self, boolean: &super::AstBooleanExpression) {
+            self.actual.push(TestAstNode::Boolean(boolean.value));
+        }
     }
 
     fn assert_tree(input: &str, expected: Vec<TestAstNode>) {
@@ -487,7 +454,7 @@ mod test {
     pub fn should_parse_basic_binary_expression() {
         let input = "let a = 1 + 2";
         let expected = vec![
-            TestAstNode::LetStmt,
+            TestAstNode::Let,
             TestAstNode::Binary,
             TestAstNode::Number(1),
             TestAstNode::Number(2),
@@ -500,7 +467,7 @@ mod test {
     pub fn should_parse_parenthesized_binary_expression() {
         let input = "let a = (1 + 2) * 3";
         let expected = vec![
-            TestAstNode::LetStmt,
+            TestAstNode::Let,
             TestAstNode::Binary,
             TestAstNode::Parenthesized,
             TestAstNode::Binary,
@@ -518,9 +485,9 @@ mod test {
         let b = 1
         let a = (1 + 2) * b";
         let expected = vec![
-            TestAstNode::LetStmt,
+            TestAstNode::Let,
             TestAstNode::Number(1),
-            TestAstNode::LetStmt,
+            TestAstNode::Let,
             TestAstNode::Binary,
             TestAstNode::Parenthesized,
             TestAstNode::Binary,
@@ -538,9 +505,9 @@ mod test {
         let b = 1
         let a = (1 + 2) * b + 3";
         let expected = vec![
-            TestAstNode::LetStmt,
+            TestAstNode::Let,
             TestAstNode::Number(1),
-            TestAstNode::LetStmt,
+            TestAstNode::Let,
             TestAstNode::Binary,
             TestAstNode::Binary,
             TestAstNode::Parenthesized,
@@ -558,7 +525,7 @@ mod test {
     pub fn should_parse_bitwise_and() {
         let input = "let a = 1 & 2";
         let expected = vec![
-            TestAstNode::LetStmt,
+            TestAstNode::Let,
             TestAstNode::Binary,
             TestAstNode::Number(1),
             TestAstNode::Number(2),
@@ -571,7 +538,7 @@ mod test {
     pub fn should_parse_bitwise_or() {
         let input = "let a = 1 | 2";
         let expected = vec![
-            TestAstNode::LetStmt,
+            TestAstNode::Let,
             TestAstNode::Binary,
             TestAstNode::Number(1),
             TestAstNode::Number(2),
@@ -584,7 +551,7 @@ mod test {
     pub fn should_parse_bitwise_xor() {
         let input = "let a = 1 ^ 2";
         let expected = vec![
-            TestAstNode::LetStmt,
+            TestAstNode::Let,
             TestAstNode::Binary,
             TestAstNode::Number(1),
             TestAstNode::Number(2),
@@ -596,11 +563,7 @@ mod test {
     #[test]
     pub fn should_parse_bitwise_not() {
         let input = "let a = ~1";
-        let expected = vec![
-            TestAstNode::LetStmt,
-            TestAstNode::Unary,
-            TestAstNode::Number(1),
-        ];
+        let expected = vec![TestAstNode::Let, TestAstNode::Unary, TestAstNode::Number(1)];
 
         assert_tree(input, expected);
     }
@@ -609,7 +572,7 @@ mod test {
     pub fn should_parse_bitwise_shift_left() {
         let input = "let a = 1 << 2";
         let expected = vec![
-            TestAstNode::LetStmt,
+            TestAstNode::Let,
             TestAstNode::Binary,
             TestAstNode::Number(1),
             TestAstNode::Number(2),
@@ -622,7 +585,7 @@ mod test {
     pub fn should_parse_bitwise_shift_right() {
         let input = "let a = 2 >> 1";
         let expected = vec![
-            TestAstNode::LetStmt,
+            TestAstNode::Let,
             TestAstNode::Binary,
             TestAstNode::Number(2),
             TestAstNode::Number(1),
@@ -634,11 +597,7 @@ mod test {
     #[test]
     pub fn should_parse_negation() {
         let input = "let a = -1";
-        let expected = vec![
-            TestAstNode::LetStmt,
-            TestAstNode::Unary,
-            TestAstNode::Number(1),
-        ];
+        let expected = vec![TestAstNode::Let, TestAstNode::Unary, TestAstNode::Number(1)];
 
         assert_tree(input, expected);
     }
@@ -647,10 +606,62 @@ mod test {
     pub fn should_parse_power() {
         let input = "let a = 1 ** 2";
         let expected = vec![
-            TestAstNode::LetStmt,
+            TestAstNode::Let,
             TestAstNode::Binary,
             TestAstNode::Number(1),
             TestAstNode::Number(2),
+        ];
+
+        assert_tree(input, expected);
+    }
+
+    #[test]
+    pub fn should_parse_if_statement() {
+        let input = "\
+        let a = 1
+        if a > 0 {
+            a = 20
+        }
+        ";
+        let expected = vec![
+            TestAstNode::Let,
+            TestAstNode::Number(1),
+            TestAstNode::If,
+            TestAstNode::Binary,
+            TestAstNode::Variable("a".to_string()),
+            TestAstNode::Number(0),
+            TestAstNode::Block,
+            TestAstNode::Assignment,
+            TestAstNode::Number(20),
+        ];
+
+        assert_tree(input, expected);
+    }
+
+    #[test]
+    pub fn should_parse_if_statement_with_else() {
+        let input = "\
+        let a = 1
+        if a > 0 {
+            a = 20
+        } else {
+            a = 30
+        }
+        ";
+        let expected = vec![
+            TestAstNode::Let,
+            TestAstNode::Number(1),
+            TestAstNode::If,
+            TestAstNode::Binary,
+            TestAstNode::Variable("a".to_string()),
+            TestAstNode::Number(0),
+            TestAstNode::Block,
+            TestAstNode::Assignment,
+            TestAstNode::Number(20),
+            TestAstNode::Else,
+            TestAstNode::Block,
+            TestAstNode::Assignment,
+            TestAstNode::Number(30),
         ];
 
         assert_tree(input, expected);

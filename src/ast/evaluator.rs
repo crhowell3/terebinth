@@ -6,8 +6,9 @@
 use std::collections::HashMap;
 
 use super::{
-    AstBinaryOperatorKind, AstLetStatement, AstNumberExpression, AstParenthesizedExpression,
-    AstUnaryOperatorKind, AstVariableExpression, AstVisitor, lexer::TextSpan,
+    AstBinaryOperatorKind, AstIfStatement, AstLetStatement, AstNumberExpression,
+    AstParenthesizedExpression, AstUnaryOperatorKind, AstVariableExpression, AstVisitor,
+    lexer::TextSpan,
 };
 
 pub struct AstEvaluator {
@@ -22,9 +23,25 @@ impl AstEvaluator {
             variables: HashMap::new(),
         }
     }
+    fn eval_boolean_operation<F>(&self, instruction: F) -> i64
+    where
+        F: FnOnce() -> bool,
+    {
+        let result = instruction();
+        if result { 1 } else { 0 }
+    }
 }
 
-impl AstVisitor for AstEvaluator {
+impl AstVisitor<'_> for AstEvaluator {
+    fn visit_if_statement(&mut self, if_statement: &AstIfStatement) {
+        self.visit_expression(&if_statement.condition);
+        if self.last_value.unwrap() != 0 {
+            self.visit_statement(&if_statement.then_branch);
+        } else if let Some(else_branch) = &if_statement.else_branch {
+            self.visit_statement(&else_branch.else_statement);
+        }
+    }
+
     fn visit_number_expression(&mut self, number: &AstNumberExpression) {
         self.last_value = Some(number.number);
     }
@@ -58,7 +75,23 @@ impl AstVisitor for AstEvaluator {
             AstBinaryOperatorKind::BitwiseXor => left ^ right,
             AstBinaryOperatorKind::LeftShift => left << right,
             AstBinaryOperatorKind::RightShift => left >> right,
+            AstBinaryOperatorKind::Equals => self.eval_boolean_operation(|| left == right),
+            AstBinaryOperatorKind::NotEquals => self.eval_boolean_operation(|| left != right),
+            AstBinaryOperatorKind::LessThan => self.eval_boolean_operation(|| left < right),
+            AstBinaryOperatorKind::LessThanOrEqual => self.eval_boolean_operation(|| left <= right),
+            AstBinaryOperatorKind::GreaterThan => self.eval_boolean_operation(|| left > right),
+            AstBinaryOperatorKind::GreaterThanOrEqual => {
+                self.eval_boolean_operation(|| left >= right)
+            }
         });
+    }
+
+    fn visit_while_statement(&mut self, while_statement: &super::AstWhileStatement) {
+        self.visit_expression(&while_statement.condition);
+        while self.last_value.unwrap() != 0 {
+            self.visit_statement(&while_statement.body);
+            self.visit_expression(&while_statement.condition);
+        }
     }
 
     fn visit_let_statement(&mut self, let_statement: &AstLetStatement) {
@@ -83,5 +116,19 @@ impl AstVisitor for AstEvaluator {
         parenthesized_expression: &AstParenthesizedExpression,
     ) {
         self.visit_expression(&parenthesized_expression.expression);
+    }
+
+    fn visit_assignment_expression(
+        &mut self,
+        assignment_expression: &super::AstAssignmentExpression,
+    ) {
+        let identifier = &assignment_expression.identifier.span.literal;
+        self.visit_expression(&assignment_expression.expression);
+        self.variables
+            .insert(identifier.clone(), self.last_value.unwrap());
+    }
+
+    fn visit_boolean_expression(&mut self, boolean: &super::AstBooleanExpression) {
+        self.last_value = Some(boolean.value as i64);
     }
 }

@@ -1,3 +1,5 @@
-let first_number = 1
-let second_number = 4
-let sum = first_number + second_number
+let a = 10
+while a > 0 {
+	a = a - 1
+}
+a
