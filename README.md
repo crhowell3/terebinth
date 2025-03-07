@@ -56,7 +56,11 @@
 
 ## 💭 About
 The terebinth programming language is a compiled language. The compiler is
-built entirely using Rust to ensure memory safety and robustness.
+built entirely using Rust to ensure memory safety and robustness. For now, this
+is a hobby language that I wrote to learn more about how compilers work. I may
+iterate upon this to make it more robust in the future. I followed [this tutorial](https://www.youtube.com/playlist?list=PLI1h1vRqlHLNZAa2BEM9uZ2GEvUNYDasO)
+to get everything set up initially, so check it out if you also want to create
+your own compiler!
 
 ## 📕 Documentation
 The documentation for the latest version of the terebinth compiler can be
