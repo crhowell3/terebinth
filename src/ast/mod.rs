@@ -3,7 +3,10 @@
 //
 //     Licensed under the MIT License
 
+use std::collections::HashMap;
+
 use crate::ast::lexer::{TextSpan, Token};
+use parser::Counter;
 use printer::AstPrinter;
 use termion::color::{Fg, Reset};
 use visitor::AstVisitor;
@@ -14,14 +17,66 @@ pub mod parser;
 pub mod printer;
 pub mod visitor;
 
+#[derive(Debug, Clone, Copy, Eq, PartialEq, Hash)]
+pub struct AstStatementId {
+    pub id: usize,
+}
+
+impl AstStatementId {
+    pub fn new(id: usize) -> Self {
+        AstStatementId { id }
+    }
+}
+
+#[derive(Debug, Clone, Copy, Eq, PartialEq, Hash)]
+pub struct AstExpressionId {
+    pub id: usize,
+}
+
+impl AstExpressionId {
+    pub fn new(id: usize) -> Self {
+        AstExpressionId { id }
+    }
+}
+
+pub struct AstNodeIdGenerator {
+    pub next_statement_id: Counter,
+    pub next_expression_id: Counter,
+}
+
+impl AstNodeIdGenerator {
+    pub fn new() -> Self {
+        Self {
+            next_statement_id: Counter::new(),
+            next_expression_id: Counter::new(),
+        }
+    }
+
+    pub fn next_statement_id(&mut self) -> AstStatementId {
+        let id = self.next_statement_id.get_value();
+        self.next_statement_id.increment();
+        AstStatementId::new(id)
+    }
+
+    pub fn next_expression_id(&mut self) -> AstExpressionId {
+        let id = self.next_expression_id.get_value();
+        self.next_expression_id.increment();
+        AstExpressionId::new(id)
+    }
+}
+
 pub struct Ast {
-    pub statements: Vec<AstStatement>,
+    pub statements: HashMap<AstStatementId, AstStatement>,
+    pub expressions: HashMap<AstExpressionId, AstExpression>,
+    pub node_id_generator: AstNodeIdGenerator,
 }
 
 impl Ast {
     pub fn new() -> Self {
         Self {
-            statements: Vec::new(),
+            statements: HashMap::new(),
+            expressions: HashMap::new(),
+            node_id_generator: AstNodeIdGenerator::new(),
         }
     }
 
@@ -44,7 +99,7 @@ impl Ast {
 
 #[derive(Debug, Clone)]
 pub enum AstStatementKind {
-    Expression(AstExpression),
+    Expression(AstExpressionId),
     Let(AstLetStatement),
     If(AstIfStatement),
     Block(AstBlockStatement),
