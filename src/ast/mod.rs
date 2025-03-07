@@ -192,7 +192,14 @@ pub enum AstExpressionKind {
     Variable(AstVariableExpression),
     Assignment(AstAssignmentExpression),
     Boolean(AstBooleanExpression),
+    Call(AstCallExpression),
     Error(TextSpan),
+}
+
+#[derive(Debug, Clone)]
+pub struct AstCallExpression {
+    pub identifier: Token,
+    pub arguments: Vec<AstExpression>,
 }
 
 #[derive(Debug, Clone)]
@@ -363,6 +370,13 @@ impl AstExpression {
         }))
     }
 
+    pub fn call(identifier: Token, arguments: Vec<AstExpression>) -> Self {
+        AstExpression::new(AstExpressionKind::Call(AstCallExpression {
+            identifier,
+            arguments,
+        }))
+    }
+
     pub fn error(span: TextSpan) -> Self {
         AstExpression::new(AstExpressionKind::Error(span))
     }
@@ -372,7 +386,11 @@ impl AstExpression {
 mod test {
     use crate::compilation_unit::CompilationUnit;
 
-    use super::{Ast, AstUnaryExpression, AstVisitor};
+    use super::{
+        Ast, AstAssignmentExpression, AstBinaryExpression, AstBlockStatement, AstBooleanExpression,
+        AstCallExpression, AstIfStatement, AstReturnStatement, AstUnaryExpression, AstVisitor,
+        AstWhileStatement,
+    };
 
     #[derive(Debug, PartialEq, Eq)]
     enum TestAstNode {
@@ -387,6 +405,10 @@ mod test {
         Variable(String),
         If,
         Else,
+        Func,
+        While,
+        Return,
+        Call,
     }
 
     struct AstVerifier {
@@ -396,13 +418,7 @@ mod test {
 
     impl AstVerifier {
         pub fn new(input: &str, expected: Vec<TestAstNode>) -> Self {
-            let compilation_unit = CompilationUnit::compile(input);
-            assert_eq!(
-                compilation_unit.diagnostics_list.borrow().diagnostics.len(),
-                0,
-                "Expected no diagnostics, but got {:?}",
-                compilation_unit.diagnostics_list.borrow().diagnostics
-            );
+            let compilation_unit = CompilationUnit::compile(input).expect("Failed to compile");
             let mut verifier = AstVerifier {
                 expected,
                 actual: Vec::new(),
@@ -438,6 +454,18 @@ mod test {
     }
 
     impl AstVisitor<'_> for AstVerifier {
+        fn visit_func_decl_statement(&mut self, func_decl_statement: &super::AstFuncDeclStatement) {
+            self.actual.push(TestAstNode::Func);
+            self.visit_statement(&func_decl_statement.body);
+        }
+
+        fn visit_return_statement(&mut self, return_statement: &AstReturnStatement) {
+            self.actual.push(TestAstNode::Return);
+            if let Some(expr) = &return_statement.return_value {
+                self.visit_expression(expr);
+            }
+        }
+
         fn visit_let_statement(&mut self, let_statement: &super::AstLetStatement) {
             self.actual.push(TestAstNode::Let);
             self.visit_expression(&let_statement.initializer);
@@ -450,6 +478,11 @@ mod test {
             self.actual.push(TestAstNode::Variable(
                 variable_expression.identifier.span.literal.clone(),
             ));
+        }
+
+        fn visit_assignment_expression(&mut self, assignment_expression: &AstAssignmentExpression) {
+            self.actual.push(TestAstNode::Assignment);
+            self.visit_expression(&assignment_expression.expression);
         }
 
         fn visit_number_expression(&mut self, number: &super::AstNumberExpression) {
@@ -473,14 +506,45 @@ mod test {
             self.visit_expression(&parenthesized_expression.expression);
         }
 
-        fn visit_binary_expression(&mut self, binary_expression: &super::AstBinaryExpression) {
+        fn visit_binary_expression(&mut self, binary_expression: &AstBinaryExpression) {
             self.actual.push(TestAstNode::Binary);
             self.visit_expression(&binary_expression.left);
             self.visit_expression(&binary_expression.right);
         }
 
-        fn visit_boolean_expression(&mut self, boolean: &super::AstBooleanExpression) {
+        fn visit_boolean_expression(&mut self, boolean: &AstBooleanExpression) {
             self.actual.push(TestAstNode::Boolean(boolean.value));
+        }
+
+        fn visit_if_statement(&mut self, if_statement: &AstIfStatement) {
+            self.actual.push(TestAstNode::If);
+            self.visit_expression(&if_statement.condition);
+            self.visit_statement(&if_statement.then_branch);
+            if let Some(else_branch) = &if_statement.else_branch {
+                self.actual.push(TestAstNode::Else);
+
+                self.visit_statement(&else_branch.else_statement);
+            }
+        }
+
+        fn visit_while_statement(&mut self, while_statement: &AstWhileStatement) {
+            self.actual.push(TestAstNode::While);
+            self.visit_expression(&while_statement.condition);
+            self.visit_statement(&while_statement.body);
+        }
+
+        fn visit_block_statement(&mut self, block_statement: &AstBlockStatement) {
+            self.actual.push(TestAstNode::Block);
+            for statement in &block_statement.statements {
+                self.visit_statement(statement);
+            }
+        }
+
+        fn visit_call_expression(&mut self, call_expression: &AstCallExpression) {
+            self.actual.push(TestAstNode::Call);
+            for argument in &call_expression.arguments {
+                self.visit_expression(argument);
+            }
         }
     }
 
@@ -701,6 +765,76 @@ mod test {
             TestAstNode::Block,
             TestAstNode::Assignment,
             TestAstNode::Number(30),
+        ];
+
+        assert_tree(input, expected);
+    }
+
+    #[test]
+    pub fn should_parse_while_statement() {
+        let input = "\
+        let a = 1
+        while a < 10 {
+            a = a + 1
+        }
+        ";
+        let expected = vec![
+            TestAstNode::Let,
+            TestAstNode::Number(1),
+            TestAstNode::While,
+            TestAstNode::Binary,
+            TestAstNode::Variable("a".to_string()),
+            TestAstNode::Number(10),
+            TestAstNode::Block,
+            TestAstNode::Assignment,
+            TestAstNode::Binary,
+            TestAstNode::Variable("a".to_string()),
+            TestAstNode::Number(1),
+        ];
+
+        assert_tree(input, expected);
+    }
+
+    #[test]
+    pub fn should_parse_function_declaration() {
+        let input = "\
+        func add(a, b) {
+            return a + b
+        }
+        ";
+        let expected = vec![
+            TestAstNode::Func,
+            TestAstNode::Block,
+            TestAstNode::Return,
+            TestAstNode::Binary,
+            TestAstNode::Variable("a".to_string()),
+            TestAstNode::Variable("b".to_string()),
+        ];
+
+        assert_tree(input, expected);
+    }
+
+    #[test]
+    pub fn should_parse_call_expression() {
+        let input = "\
+        func add(a, b) {
+            return a + b
+        }
+        add(2 * 3, 4 + 5)";
+        let expected = vec![
+            TestAstNode::Func,
+            TestAstNode::Block,
+            TestAstNode::Return,
+            TestAstNode::Binary,
+            TestAstNode::Variable("a".to_string()),
+            TestAstNode::Variable("b".to_string()),
+            TestAstNode::Call,
+            TestAstNode::Binary,
+            TestAstNode::Number(2),
+            TestAstNode::Number(3),
+            TestAstNode::Binary,
+            TestAstNode::Number(4),
+            TestAstNode::Number(5),
         ];
 
         assert_tree(input, expected);

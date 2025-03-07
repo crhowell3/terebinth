@@ -57,6 +57,44 @@ impl AstPrinter {
 }
 
 impl AstVisitor<'_> for AstPrinter {
+    fn visit_call_expression(&mut self, call_expression: &AstCallExpression) {
+        self.add_text(&call_expression.identifier.span.literal);
+        self.add_text("(");
+        for (i, argument) in call_expression.arguments.iter().enumerate() {
+            if i != 0 {
+                self.add_text(",");
+                self.add_whitespace();
+            }
+            self.visit_expression(argument);
+        }
+        self.add_text(")");
+    }
+
+    fn visit_return_statement(&mut self, return_statement: &AstReturnStatement) {
+        self.add_keyword("return");
+        if let Some(expr) = &return_statement.return_value {
+            self.add_whitespace();
+            self.visit_expression(expr);
+        }
+    }
+
+    fn visit_func_decl_statement(&mut self, func_decl_statement: &AstFuncDeclStatement) {
+        self.add_keyword("func");
+        self.add_whitespace();
+        self.add_text(&func_decl_statement.identifier.span.literal);
+        self.add_text("(");
+        for (i, parameter) in func_decl_statement.parameters.iter().enumerate() {
+            if i != 0 {
+                self.add_text(",");
+                self.add_whitespace();
+            }
+            self.add_text(&parameter.identifier.span.literal);
+        }
+        self.add_text(")");
+        self.add_whitespace();
+        self.visit_statement(&func_decl_statement.body);
+    }
+
     fn visit_boolean_expression(&mut self, boolean: &AstBooleanExpression) {
         self.add_boolean_literal(boolean.value);
     }

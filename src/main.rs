@@ -34,12 +34,12 @@ fn check_extension(file_path: &str) -> Result<PathBuf, String> {
     Ok(file_path)
 }
 
-fn main() -> Result<()> {
+fn main() -> Result<(), ()> {
     let args = Args::parse();
     let file_path = args.source_file;
-    let file_contents = std::fs::read_to_string(file_path)?;
+    let file_contents = std::fs::read_to_string(file_path).map_err(|_| ())?;
 
-    let compilation_unit = CompilationUnit::compile(&file_contents);
-    compilation_unit.maybe_run();
+    let compilation_unit = CompilationUnit::compile(&file_contents).map_err(|_| ())?;
+    compilation_unit.run();
     Ok(())
 }
