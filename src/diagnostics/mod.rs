@@ -9,7 +9,7 @@ use crate::ast::lexer::{TextSpan, Token, TokenKind};
 
 pub mod printer;
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Copy)]
 pub enum DiagnosticKind {
     Error,
     Warning,
@@ -34,6 +34,7 @@ impl Diagnostic {
 
 pub type DiagnosticsListCell = Rc<RefCell<DiagnosticsList>>;
 
+#[derive(Debug)]
 pub struct DiagnosticsList {
     pub diagnostics: Vec<Diagnostic>,
 }
@@ -75,6 +76,30 @@ impl DiagnosticsList {
             token.span.clone(),
         );
     }
+
+    pub fn report_undeclared_function(&mut self, token: &Token) {
+        self.report_error(
+            format!("Undeclared function '{}'", token.span.literal),
+            token.span.clone(),
+        );
+    }
+
+    pub fn report_invalid_argument_count(&mut self, token: &Token, expected: usize, actual: usize) {
+        self.report_error(
+            format!(
+                "Function '{}' expects {} arguments, but was given {}",
+                token.span.literal, expected, actual
+            ),
+            token.span.clone(),
+        );
+    }
+
+    pub fn report_function_already_declared(&mut self, token: &Token) {
+        self.report_error(
+            format!("Function '{}' already declared", token.span.literal),
+            token.span.clone(),
+        );
+    }
 }
 
 #[cfg(test)]
@@ -92,7 +117,9 @@ mod test {
 
     impl DiagnosticsVerifier {
         pub fn new(input: &str, messages: Vec<&str>) -> Self {
+            let messages_len = messages.len();
             let expected = Self::parse_input(input, messages);
+            assert_eq!(expected.len(), messages_len);
             let actual = Self::compile(input);
             Self { expected, actual }
         }
@@ -100,8 +127,10 @@ mod test {
         fn compile(input: &str) -> Vec<Diagnostic> {
             let raw = Self::get_raw_text(input);
             let compilation_unit = CompilationUnit::compile(&raw);
-            let diagnostics = compilation_unit.diagnostics_list.borrow();
-            diagnostics.diagnostics.clone()
+            match compilation_unit {
+                Ok(_) => vec![],
+                Err(e) => e.borrow().diagnostics.clone(),
+            }
         }
 
         fn get_raw_text(input: &str) -> String {
@@ -192,6 +221,33 @@ mod test {
     fn should_report_invalid_token() {
         let input = "let a = 8 «@» 2";
         let expected = vec!["Expected expression, found <Invalid>"];
+
+        let verifier = DiagnosticsVerifier::new(input, expected);
+        verifier.verify();
+    }
+
+    #[test]
+    fn should_report_undeclared_variable_if_declared_in_if_without_block() {
+        let input = "\
+        let b = -1
+        if b > 10
+            let a = 10
+        «a»
+        ";
+        let expected = vec!["Undeclared variable 'a'"];
+
+        let verifier = DiagnosticsVerifier::new(input, expected);
+        verifier.verify();
+    }
+
+    #[test]
+    fn should_report_function_already_declared() {
+        let input = "\
+        func a() {}
+        func «a»() {}
+        ";
+
+        let expected = vec!["Function 'a' already declared"];
 
         let verifier = DiagnosticsVerifier::new(input, expected);
         verifier.verify();

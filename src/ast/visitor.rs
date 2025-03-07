@@ -1,5 +1,4 @@
 use crate::ast::lexer::TextSpan;
-use crate::ast::printer::AstPrinter;
 use crate::ast::{
     AstAssignmentExpression, AstBinaryExpression, AstBlockStatement, AstBooleanExpression,
     AstExpression, AstExpressionKind, AstIfStatement, AstLetStatement, AstNumberExpression,
@@ -7,7 +6,7 @@ use crate::ast::{
     AstVariableExpression,
 };
 
-use super::AstWhileStatement;
+use super::{AstCallExpression, AstFuncDeclStatement, AstReturnStatement, AstWhileStatement};
 
 pub trait AstVisitor<'a> {
     fn do_visit_statement(&mut self, statement: &AstStatement) {
@@ -27,6 +26,22 @@ pub trait AstVisitor<'a> {
             AstStatementKind::While(stmt) => {
                 self.visit_while_statement(stmt);
             }
+            AstStatementKind::FuncDecl(stmt) => {
+                self.visit_func_decl_statement(stmt);
+            }
+            AstStatementKind::Return(stmt) => {
+                self.visit_return_statement(stmt);
+            }
+        }
+    }
+
+    fn visit_func_decl_statement(&mut self, func_decl_statement: &AstFuncDeclStatement) {
+        self.visit_statement(&func_decl_statement.body);
+    }
+
+    fn visit_return_statement(&mut self, return_statement: &AstReturnStatement) {
+        if let Some(expr) = &return_statement.return_value {
+            self.visit_expression(expr);
         }
     }
 
@@ -81,11 +96,20 @@ pub trait AstVisitor<'a> {
             AstExpressionKind::Boolean(expr) => {
                 self.visit_boolean_expression(expr);
             }
+            AstExpressionKind::Call(expr) => {
+                self.visit_call_expression(expr);
+            }
         }
     }
 
     fn visit_expression(&mut self, expression: &AstExpression) {
         self.do_visit_expression(expression);
+    }
+
+    fn visit_call_expression(&mut self, call_expression: &AstCallExpression) {
+        for argument in &call_expression.arguments {
+            self.visit_expression(argument);
+        }
     }
 
     fn visit_assignment_expression(&mut self, assignment_expression: &AstAssignmentExpression) {
