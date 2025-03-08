@@ -5,7 +5,9 @@
 
 use std::{cell::RefCell, rc::Rc};
 
-use crate::ast::lexer::{TextSpan, Token, TokenKind};
+use crate::ast::lexer::{Token, TokenKind};
+use crate::source::span::TextSpan;
+use crate::typings::Type;
 
 pub mod printer;
 
@@ -100,15 +102,34 @@ impl DiagnosticsList {
             token.span.clone(),
         );
     }
+
+    pub fn report_type_mismatch(&mut self, span: &TextSpan, expected: &Type, actual: &Type) {
+        self.report_error(
+            format!("Expected type '{}', found '{}'", expected, actual),
+            span.clone(),
+        );
+    }
+
+    pub fn report_undeclared_type(&mut self, token: &Token) {
+        self.report_error(
+            format!("Undeclared type '{}'", token.span.literal),
+            token.span.clone(),
+        );
+    }
+
+    pub fn report_cannot_return_outside_function(&mut self, token: &Token) {
+        self.report_error(
+            format!("Cannot use 'return' outside of function scope"),
+            token.span.clone(),
+        );
+    }
 }
 
 #[cfg(test)]
 mod test {
-    use std::thread::current;
-
-    use crate::{ast::lexer::TextSpan, compilation_unit::CompilationUnit};
-
-    use super::{Diagnostic, DiagnosticKind};
+    use crate::compilation_unit::CompilationUnit;
+    use crate::diagnostics::{Diagnostic, DiagnosticKind};
+    use crate::source::span::TextSpan;
 
     struct DiagnosticsVerifier {
         actual: Vec<Diagnostic>,
@@ -199,13 +220,17 @@ mod test {
         }
     }
 
+    fn assert_diagnostics(input: &str, expected: Vec<&str>) {
+        let verifier = DiagnosticsVerifier::new(input, expected);
+        verifier.verify();
+    }
+
     #[test]
     fn should_report_undeclared_variable() {
         let input = "let a = «b»";
         let expected = vec!["Undeclared variable 'b'"];
 
-        let verifier = DiagnosticsVerifier::new(input, expected);
-        verifier.verify();
+        assert_diagnostics(input, expected);
     }
 
     #[test]
@@ -213,8 +238,7 @@ mod test {
         let input = "let a = «+»";
         let expected = vec!["Expected expression, found <+>"];
 
-        let verifier = DiagnosticsVerifier::new(input, expected);
-        verifier.verify();
+        assert_diagnostics(input, expected);
     }
 
     #[test]
@@ -222,8 +246,7 @@ mod test {
         let input = "let a = 8 «@» 2";
         let expected = vec!["Expected expression, found <Invalid>"];
 
-        let verifier = DiagnosticsVerifier::new(input, expected);
-        verifier.verify();
+        assert_diagnostics(input, expected);
     }
 
     #[test]
@@ -236,8 +259,7 @@ mod test {
         ";
         let expected = vec!["Undeclared variable 'a'"];
 
-        let verifier = DiagnosticsVerifier::new(input, expected);
-        verifier.verify();
+        assert_diagnostics(input, expected);
     }
 
     #[test]
@@ -249,7 +271,6 @@ mod test {
 
         let expected = vec!["Function 'a' already declared"];
 
-        let verifier = DiagnosticsVerifier::new(input, expected);
-        verifier.verify();
+        assert_diagnostics(input, expected);
     }
 }

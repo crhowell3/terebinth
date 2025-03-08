@@ -5,6 +5,8 @@
 
 use std::fmt::{Display, Formatter};
 
+use crate::source::span::TextSpan;
+
 #[derive(Debug, PartialEq, Clone)]
 pub enum TokenKind {
     // Literals
@@ -43,6 +45,8 @@ pub enum TokenKind {
     OpenBrace,
     CloseBrace,
     Comma,
+    Colon,
+    Arrow,
     // Other
     Semicolon,
     Whitespace,
@@ -90,29 +94,10 @@ impl Display for TokenKind {
             TokenKind::While => write!(f, "While"),
             TokenKind::Func => write!(f, "Func"),
             TokenKind::Return => write!(f, "Return"),
-            TokenKind::Comma => write!(f, "Comma"),
+            TokenKind::Comma => write!(f, ","),
+            TokenKind::Colon => write!(f, ":"),
+            TokenKind::Arrow => write!(f, "->"),
         }
-    }
-}
-
-#[derive(Debug, PartialEq, Clone)]
-pub struct TextSpan {
-    pub(crate) start: usize,
-    pub(crate) end: usize,
-    pub(crate) literal: String,
-}
-
-impl TextSpan {
-    pub fn new(start: usize, end: usize, literal: String) -> Self {
-        TextSpan {
-            start,
-            end,
-            literal,
-        }
-    }
-
-    pub fn length(&self) -> usize {
-        self.end - self.start
     }
 }
 
@@ -186,7 +171,7 @@ impl<'a> Lexer<'a> {
         let c = self.consume().unwrap();
         match c {
             '+' => TokenKind::Plus,
-            '-' => TokenKind::Minus,
+            '-' => self.lex_potential_double_char_operator('>', TokenKind::Minus, TokenKind::Arrow),
             '*' => self.lex_potential_double_char_operator(
                 '*',
                 TokenKind::Asterisk,
@@ -223,6 +208,7 @@ impl<'a> Lexer<'a> {
             '{' => TokenKind::OpenBrace,
             '}' => TokenKind::CloseBrace,
             ',' => TokenKind::Comma,
+            ':' => TokenKind::Colon,
             _ => TokenKind::Invalid,
         }
     }

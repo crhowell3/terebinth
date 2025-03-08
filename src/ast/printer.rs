@@ -1,18 +1,21 @@
 use termion::color;
 
 use crate::ast::*;
+use crate::source::span::TextSpan;
 
-pub struct AstPrinter {
+pub struct AstPrinter<'a> {
     indent: usize,
     pub result: String,
+    pub ast: &'a Ast,
 }
 
-impl AstPrinter {
+impl<'a> AstPrinter<'a> {
     const NUMBER_COLOR: color::Magenta = color::Magenta;
     const TEXT_COLOR: color::LightWhite = color::LightWhite;
     const KEYWORD_COLOR: color::Blue = color::Blue;
     const VARIABLE_COLOR: color::Green = color::Green;
     const BOOLEAN_COLOR: color::LightMagenta = color::LightMagenta;
+    const TYPE_COLOR: color::LightYellow = color::LightYellow;
 
     fn add_whitespace(&mut self) {
         self.result.push(' ');
@@ -48,16 +51,36 @@ impl AstPrinter {
             .push_str(&format!("{}{}", Self::BOOLEAN_COLOR.fg_str(), boolean))
     }
 
-    pub fn new() -> Self {
+    fn add_type(&mut self, type_: &str) {
+        self.result
+            .push_str(&format!("{}{}", Self::TYPE_COLOR.fg_str(), type_,));
+    }
+
+    fn add_type_annotation(&mut self, type_annotation: &StaticTypeAnnotation) {
+        self.add_text(":");
+        self.add_whitespace();
+        self.add_type(&type_annotation.type_name.span.literal);
+    }
+
+    pub fn new(ast: &'a Ast) -> Self {
         Self {
             indent: 0,
             result: String::new(),
+            ast,
         }
     }
 }
 
-impl AstVisitor<'_> for AstPrinter {
-    fn visit_call_expression(&mut self, call_expression: &AstCallExpression) {
+impl AstVisitor for AstPrinter<'_> {
+    fn get_ast(&self) -> &Ast {
+        self.ast
+    }
+
+    fn visit_call_expression(
+        &mut self,
+        call_expression: &AstCallExpression,
+        _expr: &AstExpression,
+    ) {
         self.add_text(&call_expression.identifier.span.literal);
         self.add_text("(");
         for (i, argument) in call_expression.arguments.iter().enumerate() {
@@ -89,13 +112,20 @@ impl AstVisitor<'_> for AstPrinter {
                 self.add_whitespace();
             }
             self.add_text(&parameter.identifier.span.literal);
+            self.add_type_annotation(&parameter.type_annotation);
         }
         self.add_text(")");
         self.add_whitespace();
+        if let Some(return_type) = &func_decl_statement.return_type {
+            self.add_text("->");
+            self.add_whitespace();
+            self.add_type(&return_type.type_name.span.literal);
+            self.add_whitespace();
+        }
         self.visit_statement(&func_decl_statement.body);
     }
 
-    fn visit_boolean_expression(&mut self, boolean: &AstBooleanExpression) {
+    fn visit_boolean_expression(&mut self, boolean: &AstBooleanExpression, _expr: &AstExpression) {
         self.add_boolean_literal(boolean.value);
     }
 
@@ -124,13 +154,20 @@ impl AstVisitor<'_> for AstPrinter {
         self.add_keyword("let");
         self.add_whitespace();
         self.add_text(let_statement.identifier.span.literal.as_str());
+        if let Some(type_annotation) = &let_statement.type_annotation {
+            self.add_type_annotation(type_annotation);
+        }
         self.add_whitespace();
         self.add_text("=");
         self.add_whitespace();
         self.visit_expression(&let_statement.initializer);
     }
 
-    fn visit_assignment_expression(&mut self, assignment_expression: &AstAssignmentExpression) {
+    fn visit_assignment_expression(
+        &mut self,
+        assignment_expression: &AstAssignmentExpression,
+        _expr: &AstExpression,
+    ) {
         self.add_variable(assignment_expression.identifier.span.literal.as_str());
         self.add_whitespace();
         self.add_text("=");
@@ -138,7 +175,7 @@ impl AstVisitor<'_> for AstPrinter {
         self.visit_expression(&assignment_expression.expression);
     }
 
-    fn visit_statement(&mut self, statement: &AstStatement) {
+    fn visit_statement(&mut self, statement: &AstStmtId) {
         self.add_indent();
         Self::do_visit_statement(self, statement);
         self.result.push_str(&format!("{}\n", Fg(Reset)));
@@ -156,7 +193,7 @@ impl AstVisitor<'_> for AstPrinter {
         self.add_text("}");
     }
 
-    fn visit_number_expression(&mut self, number: &AstNumberExpression) {
+    fn visit_number_expression(&mut self, number: &AstNumberExpression, _expr: &AstExpression) {
         self.result
             .push_str(&format!("{}{}", Self::NUMBER_COLOR.fg_str(), number.number));
     }
@@ -166,7 +203,11 @@ impl AstVisitor<'_> for AstPrinter {
             .push_str(&format!("{}{}", Self::TEXT_COLOR.fg_str(), span.literal));
     }
 
-    fn visit_unary_expression(&mut self, unary_expression: &AstUnaryExpression) {
+    fn visit_unary_expression(
+        &mut self,
+        unary_expression: &AstUnaryExpression,
+        _expr: &AstExpression,
+    ) {
         self.result.push_str(&format!(
             "{}{}",
             Self::TEXT_COLOR.fg_str(),
@@ -175,7 +216,11 @@ impl AstVisitor<'_> for AstPrinter {
         self.visit_expression(&unary_expression.operand);
     }
 
-    fn visit_binary_expression(&mut self, binary_expression: &AstBinaryExpression) {
+    fn visit_binary_expression(
+        &mut self,
+        binary_expression: &AstBinaryExpression,
+        _expr: &AstExpression,
+    ) {
         self.visit_expression(&binary_expression.left);
         self.add_whitespace();
         self.result.push_str(&format!(
@@ -190,6 +235,7 @@ impl AstVisitor<'_> for AstPrinter {
     fn visit_parenthesized_expression(
         &mut self,
         parenthesized_expression: &AstParenthesizedExpression,
+        _expr: &AstExpression,
     ) {
         self.result
             .push_str(&format!("{}{}", Self::TEXT_COLOR.fg_str(), "("));
@@ -198,7 +244,11 @@ impl AstVisitor<'_> for AstPrinter {
             .push_str(&format!("{}{}", Self::TEXT_COLOR.fg_str(), ")"));
     }
 
-    fn visit_variable_expression(&mut self, variable_expression: &AstVariableExpression) {
+    fn visit_variable_expression(
+        &mut self,
+        variable_expression: &AstVariableExpression,
+        _expr: &AstExpression,
+    ) {
         self.result.push_str(&format!(
             "{}{}",
             Self::VARIABLE_COLOR.fg_str(),

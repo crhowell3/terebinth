@@ -4,12 +4,11 @@
 //     Licensed under the MIT License
 
 use std::collections::HashMap;
+use std::hash::Hash;
 
-use crate::{
-    ast::lexer::{TextSpan, Token},
-    typings::Type,
-};
-use parser::Counter;
+use crate::ast::parser::Counter;
+use crate::typings::Type;
+use crate::{ast::lexer::Token, source::span::TextSpan};
 use printer::AstPrinter;
 use termion::color::{Fg, Reset};
 use visitor::AstVisitor;
@@ -42,6 +41,7 @@ impl AstExprId {
     }
 }
 
+#[derive(Debug, Clone)]
 pub struct AstNodeIdGenerator {
     pub next_statement_id: Counter,
     pub next_expression_id: Counter,
@@ -68,6 +68,7 @@ impl AstNodeIdGenerator {
     }
 }
 
+#[derive(Debug, Clone)]
 pub struct Ast {
     pub statements: HashMap<AstStmtId, AstStatement>,
     pub expressions: HashMap<AstExprId, AstExpression>,
@@ -113,10 +114,16 @@ impl Ast {
         self.stmt_from_kind(AstStatementKind::Expression(expr_id))
     }
 
-    pub fn let_statement(&mut self, identifier: Token, initializer: AstExprId) -> &AstStatement {
+    pub fn let_statement(
+        &mut self,
+        identifier: Token,
+        initializer: AstExprId,
+        type_annotation: Option<StaticTypeAnnotation>,
+    ) -> &AstStatement {
         self.stmt_from_kind(AstStatementKind::Let(AstLetStatement {
             identifier,
             initializer,
+            type_annotation,
         }))
     }
 
@@ -281,13 +288,13 @@ impl Ast {
     }
 
     pub fn visit(&self, visitor: &mut dyn AstVisitor) {
-        for statement in &self.statements {
+        for statement in &self.top_level_statements {
             visitor.visit_statement(statement);
         }
     }
 
     pub fn visualize(&self) {
-        let mut printer = AstPrinter::new();
+        let mut printer = AstPrinter::new(self);
         self.visit(&mut printer);
         println!("{}", printer.result);
     }
@@ -387,6 +394,7 @@ pub struct AstIfStatement {
 pub struct AstLetStatement {
     pub identifier: Token,
     pub initializer: AstExprId,
+    pub type_annotation: Option<StaticTypeAnnotation>,
 }
 
 #[derive(Debug, Clone)]
@@ -443,7 +451,7 @@ pub enum AstUnaryOperatorKind {
 
 #[derive(Debug, Clone)]
 pub struct AstUnaryOperator {
-    kind: AstUnaryOperatorKind,
+    pub(crate) kind: AstUnaryOperatorKind,
     token: Token,
 }
 
@@ -552,15 +560,59 @@ impl AstExpression {
             expr_type,
         }
     }
+
+    pub fn span(&self, ast: &Ast) -> TextSpan {
+        match &self.kind {
+            AstExpressionKind::Number(expr) => expr.token.span.clone(),
+            AstExpressionKind::Binary(expr) => {
+                let left = ast.query_expr(&expr.left).span(ast);
+                let operator = expr.operator.token.span.clone();
+                let right = ast.query_expr(&expr.right).span(ast);
+                TextSpan::combine(vec![left, operator, right])
+            }
+            AstExpressionKind::Unary(expr) => {
+                let operator = expr.operator.token.span.clone();
+                let operand = ast.query_expr(&expr.operand).span(ast);
+                TextSpan::combine(vec![operator, operand])
+            }
+            AstExpressionKind::Parenthesized(expr) => {
+                let open_paren = expr.left_paren.span.clone();
+                let expression = ast.query_expr(&expr.expression).span(ast);
+                let close_paren = expr.right_paren.span.clone();
+                TextSpan::combine(vec![open_paren, expression, close_paren])
+            }
+            AstExpressionKind::Variable(expr) => expr.identifier.span.clone(),
+            AstExpressionKind::Assignment(expr) => {
+                let identifier = expr.identifier.span.clone();
+                let equals = expr.equals.span.clone();
+                let expression = ast.query_expr(&expr.expression).span(ast);
+                TextSpan::combine(vec![identifier, equals, expression])
+            }
+            AstExpressionKind::Boolean(expr) => expr.token.span.clone(),
+            AstExpressionKind::Call(expr) => {
+                let identifier = expr.identifier.span.clone();
+                let left_paren = expr.left_paren.span.clone();
+                let right_paren = expr.right_paren.span.clone();
+                let mut spans = vec![identifier, left_paren, right_paren];
+                for arg in &expr.arguments {
+                    spans.push(ast.query_expr(arg).span(ast));
+                }
+                TextSpan::combine(spans)
+            }
+            AstExpressionKind::Error(span) => span.clone(),
+        }
+    }
 }
 
 #[cfg(test)]
 mod test {
+    use crate::ast::visitor::AstVisitor;
     use crate::compilation_unit::CompilationUnit;
+    use crate::source::span::TextSpan;
 
     use super::{
         Ast, AstAssignmentExpression, AstBinaryExpression, AstBlockStatement, AstBooleanExpression,
-        AstCallExpression, AstIfStatement, AstReturnStatement, AstUnaryExpression, AstVisitor,
+        AstCallExpression, AstExpression, AstIfStatement, AstReturnStatement, AstUnaryExpression,
         AstWhileStatement,
     };
 
@@ -586,6 +638,7 @@ mod test {
     struct AstVerifier {
         expected: Vec<TestAstNode>,
         actual: Vec<TestAstNode>,
+        ast: Ast,
     }
 
     impl AstVerifier {
@@ -594,13 +647,15 @@ mod test {
             let mut verifier = AstVerifier {
                 expected,
                 actual: Vec::new(),
+                ast: compilation_unit.ast,
             };
-            verifier.flatten_ast(&compilation_unit.ast);
+            verifier.flatten_ast();
             verifier
         }
 
-        fn flatten_ast(&mut self, ast: &Ast) {
+        fn flatten_ast(&mut self) {
             self.actual.clear();
+            let ast = &self.ast.clone();
             ast.visit(&mut *self);
         }
 
@@ -625,7 +680,11 @@ mod test {
         }
     }
 
-    impl AstVisitor<'_> for AstVerifier {
+    impl AstVisitor for AstVerifier {
+        fn get_ast(&self) -> &Ast {
+            &self.ast
+        }
+
         fn visit_func_decl_statement(&mut self, func_decl_statement: &super::AstFuncDeclStatement) {
             self.actual.push(TestAstNode::Func);
             self.visit_statement(&func_decl_statement.body);
@@ -646,26 +705,39 @@ mod test {
         fn visit_variable_expression(
             &mut self,
             variable_expression: &super::AstVariableExpression,
+            _expr: &AstExpression,
         ) {
             self.actual.push(TestAstNode::Variable(
                 variable_expression.identifier.span.literal.clone(),
             ));
         }
 
-        fn visit_assignment_expression(&mut self, assignment_expression: &AstAssignmentExpression) {
+        fn visit_assignment_expression(
+            &mut self,
+            assignment_expression: &AstAssignmentExpression,
+            _expr: &AstExpression,
+        ) {
             self.actual.push(TestAstNode::Assignment);
             self.visit_expression(&assignment_expression.expression);
         }
 
-        fn visit_number_expression(&mut self, number: &super::AstNumberExpression) {
+        fn visit_number_expression(
+            &mut self,
+            number: &super::AstNumberExpression,
+            _expr: &AstExpression,
+        ) {
             self.actual.push(TestAstNode::Number(number.number));
         }
 
-        fn visit_error(&mut self, span: &super::lexer::TextSpan) {
+        fn visit_error(&mut self, _span: &TextSpan) {
             // TODO
         }
 
-        fn visit_unary_expression(&mut self, unary_expression: &AstUnaryExpression) {
+        fn visit_unary_expression(
+            &mut self,
+            unary_expression: &AstUnaryExpression,
+            _expr: &AstExpression,
+        ) {
             self.actual.push(TestAstNode::Unary);
             self.visit_expression(&unary_expression.operand);
         }
@@ -673,18 +745,27 @@ mod test {
         fn visit_parenthesized_expression(
             &mut self,
             parenthesized_expression: &super::AstParenthesizedExpression,
+            _expr: &AstExpression,
         ) {
             self.actual.push(TestAstNode::Parenthesized);
             self.visit_expression(&parenthesized_expression.expression);
         }
 
-        fn visit_binary_expression(&mut self, binary_expression: &AstBinaryExpression) {
+        fn visit_binary_expression(
+            &mut self,
+            binary_expression: &AstBinaryExpression,
+            _expr: &AstExpression,
+        ) {
             self.actual.push(TestAstNode::Binary);
             self.visit_expression(&binary_expression.left);
             self.visit_expression(&binary_expression.right);
         }
 
-        fn visit_boolean_expression(&mut self, boolean: &AstBooleanExpression) {
+        fn visit_boolean_expression(
+            &mut self,
+            boolean: &AstBooleanExpression,
+            _expr: &AstExpression,
+        ) {
             self.actual.push(TestAstNode::Boolean(boolean.value));
         }
 
@@ -712,7 +793,11 @@ mod test {
             }
         }
 
-        fn visit_call_expression(&mut self, call_expression: &AstCallExpression) {
+        fn visit_call_expression(
+            &mut self,
+            call_expression: &AstCallExpression,
+            _expr: &AstExpression,
+        ) {
             self.actual.push(TestAstNode::Call);
             for argument in &call_expression.arguments {
                 self.visit_expression(argument);
@@ -970,7 +1055,7 @@ mod test {
     #[test]
     pub fn should_parse_function_declaration() {
         let input = "\
-        func add(a, b) {
+        func add(a: int, b: int) -> int {
             return a + b
         }
         ";
@@ -989,7 +1074,7 @@ mod test {
     #[test]
     pub fn should_parse_call_expression() {
         let input = "\
-        func add(a, b) {
+        func add(a: int, b: int) -> int {
             return a + b
         }
         add(2 * 3, 4 + 5)";
