@@ -13,6 +13,7 @@ mod ast;
 mod compilation_unit;
 mod diagnostics;
 mod source;
+mod typings;
 
 #[derive(Parser, Debug)]
 #[clap(name = "terebinth")]
