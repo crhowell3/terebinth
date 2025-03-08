@@ -1,15 +1,20 @@
 use crate::ast::lexer::TextSpan;
 use crate::ast::{
-    AstAssignmentExpression, AstBinaryExpression, AstBlockStatement, AstBooleanExpression,
-    AstExpression, AstExpressionKind, AstIfStatement, AstLetStatement, AstNumberExpression,
-    AstParenthesizedExpression, AstStatement, AstStatementKind, AstUnaryExpression,
-    AstVariableExpression,
+    Ast, AstAssignmentExpression, AstBinaryExpression, AstBlockStatement, AstBooleanExpression,
+    AstExpressionKind, AstIfStatement, AstLetStatement, AstNumberExpression,
+    AstParenthesizedExpression, AstStatementKind, AstUnaryExpression, AstVariableExpression,
 };
 
-use super::{AstCallExpression, AstFuncDeclStatement, AstReturnStatement, AstWhileStatement};
+use super::{
+    AstCallExpression, AstExprId, AstFuncDeclStatement, AstReturnStatement, AstStmtId,
+    AstWhileStatement,
+};
 
-pub trait AstVisitor<'a> {
-    fn do_visit_statement(&mut self, statement: &AstStatement) {
+pub trait AstVisitor {
+    fn get_ast(&self) -> &Ast;
+
+    fn do_visit_statement(&mut self, statement: &AstStmtId) {
+        let statement = self.get_ast().query_stmt(statement).clone();
         match &statement.kind {
             AstStatementKind::Expression(expr) => {
                 self.visit_expression(expr);
@@ -35,6 +40,11 @@ pub trait AstVisitor<'a> {
         }
     }
 
+    fn visit_while_statement(&mut self, while_statement: &AstWhileStatement) {
+        self.visit_expression(&while_statement.condition);
+        self.visit_statement(&while_statement.body);
+    }
+
     fn visit_func_decl_statement(&mut self, func_decl_statement: &AstFuncDeclStatement) {
         self.visit_statement(&func_decl_statement.body);
     }
@@ -43,11 +53,6 @@ pub trait AstVisitor<'a> {
         if let Some(expr) = &return_statement.return_value {
             self.visit_expression(expr);
         }
-    }
-
-    fn visit_while_statement(&mut self, while_statement: &AstWhileStatement) {
-        self.visit_expression(&while_statement.condition);
-        self.visit_statement(&while_statement.body);
     }
 
     fn visit_block_statement(&mut self, block_statement: &AstBlockStatement) {
@@ -66,11 +71,12 @@ pub trait AstVisitor<'a> {
 
     fn visit_let_statement(&mut self, let_statement: &AstLetStatement);
 
-    fn visit_statement(&mut self, statement: &AstStatement) {
+    fn visit_statement(&mut self, statement: &AstStmtId) {
         self.do_visit_statement(statement);
     }
 
-    fn do_visit_expression(&mut self, expression: &AstExpression) {
+    fn do_visit_expression(&mut self, expression: &AstExprId) {
+        let expression = self.get_ast().query_expr(expression).clone();
         match &expression.kind {
             AstExpressionKind::Number(number) => {
                 self.visit_number_expression(number);
@@ -102,7 +108,7 @@ pub trait AstVisitor<'a> {
         }
     }
 
-    fn visit_expression(&mut self, expression: &AstExpression) {
+    fn visit_expression(&mut self, expression: &AstExprId) {
         self.do_visit_expression(expression);
     }
 
