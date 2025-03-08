@@ -27,7 +27,7 @@ impl<'a> DiagnosticsPrinter<'a> {
 
         let column = diagnostic.span.start - line_start;
 
-        let (prefix, span, suffix) = self.get_text_spans(diagnostic, line, column);
+        let (prefix, span, suffix) = Self::get_text_spans(diagnostic, line, column);
 
         let indent = std::cmp::min(PREFIX_LENGTH, column);
         let (arrow_pointers, arrow_line) = Self::format_arrow(diagnostic, indent);
@@ -73,12 +73,11 @@ impl<'a> DiagnosticsPrinter<'a> {
     }
 
     fn get_text_spans(
-        &'a self,
         diagnostic: &Diagnostic,
         line: &'a str,
         column: usize,
     ) -> (&'a str, &'a str, &'a str) {
-        let prefix_start = std::cmp::max(0, column as isize - PREFIX_LENGTH as isize) as usize;
+        let prefix_start = std::cmp::max(0usize, column - PREFIX_LENGTH);
         let prefix_end = column;
         let suffix_start = std::cmp::min(column + diagnostic.span.length(), line.len());
         let suffix_end = std::cmp::min(suffix_start + PREFIX_LENGTH, line.len());

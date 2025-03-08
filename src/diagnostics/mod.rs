@@ -106,9 +106,9 @@ impl DiagnosticsList {
         );
     }
 
-    pub fn report_type_mismatch(&mut self, span: &TextSpan, expected: &Type, actual: &Type) {
+    pub fn report_type_mismatch(&mut self, span: &TextSpan, expected: Type, actual: Type) {
         self.report_error(
-            format!("Expected type '{}', found '{}'", expected, actual),
+            format!("Expected type '{expected}', found '{actual}'"),
             span.clone(),
         );
     }

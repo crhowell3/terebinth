@@ -86,16 +86,16 @@ impl Ast {
         }
     }
 
-    pub fn query_expr(&self, expr_id: &AstExprId) -> &AstExpression {
-        &self.expressions[expr_id]
+    pub fn query_expr(&self, expr_id: AstExprId) -> &AstExpression {
+        &self.expressions[&expr_id]
     }
 
-    pub fn query_stmt(&self, stmt_id: &AstStmtId) -> &AstStatement {
-        &self.statements[stmt_id]
+    pub fn query_stmt(&self, stmt_id: AstStmtId) -> &AstStatement {
+        &self.statements[&stmt_id]
     }
 
-    pub fn set_type(&mut self, expr_id: &AstExprId, expr_type: Type) {
-        let expr = self.expressions.get_mut(expr_id).unwrap();
+    pub fn set_type(&mut self, expr_id: AstExprId, expr_type: Type) {
+        let expr = self.expressions.get_mut(&expr_id).unwrap();
         expr.expr_type = expr_type;
     }
 
@@ -210,8 +210,8 @@ impl Ast {
         right: AstExprId,
     ) -> &AstExpression {
         self.expr_from_kind(AstExpressionKind::Binary(AstBinaryExpression {
-            operator,
             left,
+            operator,
             right,
         }))
     }
@@ -224,8 +224,8 @@ impl Ast {
     ) -> &AstExpression {
         self.expr_from_kind(AstExpressionKind::Parenthesized(
             AstParenthesizedExpression {
-                expression,
                 left_paren,
+                expression,
                 right_paren,
             },
         ))
@@ -256,15 +256,15 @@ impl Ast {
     ) -> &AstExpression {
         self.expr_from_kind(AstExpressionKind::Assignment(AstAssignmentExpression {
             identifier,
-            expression,
             equals,
+            expression,
         }))
     }
 
     pub fn boolean_expression(&mut self, token: Token, value: bool) -> &AstExpression {
         self.expr_from_kind(AstExpressionKind::Boolean(AstBooleanExpression {
-            token,
             value,
+            token,
         }))
     }
 
@@ -277,8 +277,8 @@ impl Ast {
     ) -> &AstExpression {
         self.expr_from_kind(AstExpressionKind::Call(AstCallExpression {
             identifier,
-            arguments,
             left_paren,
+            arguments,
             right_paren,
         }))
     }
@@ -289,7 +289,7 @@ impl Ast {
 
     pub fn visit(&self, visitor: &mut dyn AstVisitor) {
         for statement in &self.top_level_statements {
-            visitor.visit_statement(statement);
+            visitor.visit_statement(*statement);
         }
     }
 
@@ -510,19 +510,15 @@ impl AstBinaryOperator {
 
     pub fn precedence(&self) -> u8 {
         match self.kind {
-            AstBinaryOperatorKind::Equals => 30,
-            AstBinaryOperatorKind::NotEquals => 30,
-            AstBinaryOperatorKind::LessThan => 29,
-            AstBinaryOperatorKind::LessThanOrEqual => 29,
-            AstBinaryOperatorKind::GreaterThan => 29,
-            AstBinaryOperatorKind::GreaterThanOrEqual => 29,
+            AstBinaryOperatorKind::Equals | AstBinaryOperatorKind::NotEquals => 30,
+            AstBinaryOperatorKind::LessThan
+            | AstBinaryOperatorKind::LessThanOrEqual
+            | AstBinaryOperatorKind::GreaterThan
+            | AstBinaryOperatorKind::GreaterThanOrEqual => 29,
             AstBinaryOperatorKind::Power => 20,
-            AstBinaryOperatorKind::Multiply => 19,
-            AstBinaryOperatorKind::Divide => 19,
-            AstBinaryOperatorKind::Plus => 18,
-            AstBinaryOperatorKind::Minus => 18,
-            AstBinaryOperatorKind::LeftShift => 17,
-            AstBinaryOperatorKind::RightShift => 17,
+            AstBinaryOperatorKind::Multiply | AstBinaryOperatorKind::Divide => 19,
+            AstBinaryOperatorKind::Plus | AstBinaryOperatorKind::Minus => 18,
+            AstBinaryOperatorKind::LeftShift | AstBinaryOperatorKind::RightShift => 17,
             AstBinaryOperatorKind::BitwiseAnd => 16,
             AstBinaryOperatorKind::BitwiseXor => 15,
             AstBinaryOperatorKind::BitwiseOr => 14,
@@ -570,19 +566,19 @@ impl AstExpression {
         match &self.kind {
             AstExpressionKind::Number(expr) => expr.token.span.clone(),
             AstExpressionKind::Binary(expr) => {
-                let left = ast.query_expr(&expr.left).span(ast);
+                let left = ast.query_expr(expr.left).span(ast);
                 let operator = expr.operator.token.span.clone();
-                let right = ast.query_expr(&expr.right).span(ast);
+                let right = ast.query_expr(expr.right).span(ast);
                 TextSpan::combine(vec![left, operator, right])
             }
             AstExpressionKind::Unary(expr) => {
                 let operator = expr.operator.token.span.clone();
-                let operand = ast.query_expr(&expr.operand).span(ast);
+                let operand = ast.query_expr(expr.operand).span(ast);
                 TextSpan::combine(vec![operator, operand])
             }
             AstExpressionKind::Parenthesized(expr) => {
                 let open_paren = expr.left_paren.span.clone();
-                let expression = ast.query_expr(&expr.expression).span(ast);
+                let expression = ast.query_expr(expr.expression).span(ast);
                 let close_paren = expr.right_paren.span.clone();
                 TextSpan::combine(vec![open_paren, expression, close_paren])
             }
@@ -590,7 +586,7 @@ impl AstExpression {
             AstExpressionKind::Assignment(expr) => {
                 let identifier = expr.identifier.span.clone();
                 let equals = expr.equals.span.clone();
-                let expression = ast.query_expr(&expr.expression).span(ast);
+                let expression = ast.query_expr(expr.expression).span(ast);
                 TextSpan::combine(vec![identifier, equals, expression])
             }
             AstExpressionKind::Boolean(expr) => expr.token.span.clone(),
@@ -600,7 +596,7 @@ impl AstExpression {
                 let right_paren = expr.right_paren.span.clone();
                 let mut spans = vec![identifier, left_paren, right_paren];
                 for arg in &expr.arguments {
-                    spans.push(ast.query_expr(arg).span(ast));
+                    spans.push(ast.query_expr(*arg).span(ast));
                 }
                 TextSpan::combine(spans)
             }
@@ -692,19 +688,19 @@ mod test {
 
         fn visit_func_decl_statement(&mut self, func_decl_statement: &super::AstFuncDeclStatement) {
             self.actual.push(TestAstNode::Func);
-            self.visit_statement(&func_decl_statement.body);
+            self.visit_statement(func_decl_statement.body);
         }
 
         fn visit_return_statement(&mut self, return_statement: &AstReturnStatement) {
             self.actual.push(TestAstNode::Return);
             if let Some(expr) = &return_statement.return_value {
-                self.visit_expression(expr);
+                self.visit_expression(*expr);
             }
         }
 
         fn visit_let_statement(&mut self, let_statement: &super::AstLetStatement) {
             self.actual.push(TestAstNode::Let);
-            self.visit_expression(&let_statement.initializer);
+            self.visit_expression(let_statement.initializer);
         }
 
         fn visit_variable_expression(
@@ -723,7 +719,7 @@ mod test {
             _expr: &AstExpression,
         ) {
             self.actual.push(TestAstNode::Assignment);
-            self.visit_expression(&assignment_expression.expression);
+            self.visit_expression(assignment_expression.expression);
         }
 
         fn visit_number_expression(
@@ -744,7 +740,7 @@ mod test {
             _expr: &AstExpression,
         ) {
             self.actual.push(TestAstNode::Unary);
-            self.visit_expression(&unary_expression.operand);
+            self.visit_expression(unary_expression.operand);
         }
 
         fn visit_parenthesized_expression(
@@ -753,7 +749,7 @@ mod test {
             _expr: &AstExpression,
         ) {
             self.actual.push(TestAstNode::Parenthesized);
-            self.visit_expression(&parenthesized_expression.expression);
+            self.visit_expression(parenthesized_expression.expression);
         }
 
         fn visit_binary_expression(
@@ -762,8 +758,8 @@ mod test {
             _expr: &AstExpression,
         ) {
             self.actual.push(TestAstNode::Binary);
-            self.visit_expression(&binary_expression.left);
-            self.visit_expression(&binary_expression.right);
+            self.visit_expression(binary_expression.left);
+            self.visit_expression(binary_expression.right);
         }
 
         fn visit_boolean_expression(
@@ -776,25 +772,25 @@ mod test {
 
         fn visit_if_statement(&mut self, if_statement: &AstIfStatement) {
             self.actual.push(TestAstNode::If);
-            self.visit_expression(&if_statement.condition);
-            self.visit_statement(&if_statement.then_branch);
+            self.visit_expression(if_statement.condition);
+            self.visit_statement(if_statement.then_branch);
             if let Some(else_branch) = &if_statement.else_branch {
                 self.actual.push(TestAstNode::Else);
 
-                self.visit_statement(&else_branch.else_statement);
+                self.visit_statement(else_branch.else_statement);
             }
         }
 
         fn visit_while_statement(&mut self, while_statement: &AstWhileStatement) {
             self.actual.push(TestAstNode::While);
-            self.visit_expression(&while_statement.condition);
-            self.visit_statement(&while_statement.body);
+            self.visit_expression(while_statement.condition);
+            self.visit_statement(while_statement.body);
         }
 
         fn visit_block_statement(&mut self, block_statement: &AstBlockStatement) {
             self.actual.push(TestAstNode::Block);
             for statement in &block_statement.statements {
-                self.visit_statement(statement);
+                self.visit_statement(*statement);
             }
         }
 
@@ -805,7 +801,7 @@ mod test {
         ) {
             self.actual.push(TestAstNode::Call);
             for argument in &call_expression.arguments {
-                self.visit_expression(argument);
+                self.visit_expression(*argument);
             }
         }
     }
