@@ -111,6 +111,7 @@ struct Scopes {
     global_scope: GlobalScope,
 }
 
+#[allow(dead_code)]
 impl Scopes {
     fn new() -> Self {
         Scopes {
@@ -223,8 +224,8 @@ impl<'a> Resolver<'a> {
             AstBinaryOperatorKind::LessThanOrEqual => (Type::Int, Type::Int, Type::Bool),
             AstBinaryOperatorKind::GreaterThan => (Type::Int, Type::Int, Type::Bool),
             AstBinaryOperatorKind::GreaterThanOrEqual => (Type::Int, Type::Int, Type::Bool),
-            AstBinaryOperatorKind::LeftShift => todo!(),
-            AstBinaryOperatorKind::RightShift => todo!(),
+            AstBinaryOperatorKind::LeftShift => (Type::Int, Type::Int, Type::Int),
+            AstBinaryOperatorKind::RightShift => (Type::Int, Type::Int, Type::Int),
         };
 
         self.expect_type(matrix.0, &left.expr_type, &left.span(self.ast));
@@ -546,6 +547,7 @@ impl AstVisitor for Resolver<'_> {
     }
 }
 
+#[allow(dead_code)]
 pub struct CompilationUnit {
     pub ast: Ast,
     pub diagnostics_list: DiagnosticsListCell,

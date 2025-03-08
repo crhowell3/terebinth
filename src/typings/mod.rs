@@ -25,13 +25,10 @@ impl Display for Type {
 
 impl Type {
     pub fn is_assignable_to(&self, other: &Type) -> bool {
-        match (self, other) {
-            (Type::Int, Type::Int) => true,
-            (Type::Bool, Type::Bool) => true,
-            (Type::Error, _) => true,
-            (_, Type::Error) => true,
-            _ => false,
-        }
+        matches!(
+            (self, other),
+            (Type::Int, Type::Int) | (Type::Bool, Type::Bool) | (Type::Error, _) | (_, Type::Error)
+        )
     }
 
     pub fn from_str(s: &str) -> Option<Type> {

@@ -317,6 +317,7 @@ pub struct AstReturnStatement {
     pub return_value: Option<AstExprId>,
 }
 
+#[allow(dead_code)]
 #[derive(Debug, Clone)]
 pub struct StaticTypeAnnotation {
     pub colon: Token,
@@ -329,6 +330,7 @@ impl StaticTypeAnnotation {
     }
 }
 
+#[allow(dead_code)]
 #[derive(Debug, Clone)]
 pub struct AstFunctionReturnType {
     pub arrow: Token,
@@ -355,6 +357,7 @@ pub struct AstFuncDeclStatement {
     pub return_type: Option<AstFunctionReturnType>,
 }
 
+#[allow(dead_code)]
 #[derive(Debug, Clone)]
 pub struct AstWhileStatement {
     pub while_keyword: Token,
@@ -367,6 +370,7 @@ pub struct AstBlockStatement {
     pub statements: Vec<AstStmtId>,
 }
 
+#[allow(dead_code)]
 #[derive(Debug, Clone)]
 pub struct AstElseStatement {
     pub else_keyword: Token,
@@ -382,6 +386,7 @@ impl AstElseStatement {
     }
 }
 
+#[allow(dead_code)]
 #[derive(Debug, Clone)]
 pub struct AstIfStatement {
     pub if_keyword: Token,

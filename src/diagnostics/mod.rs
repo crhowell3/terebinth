@@ -11,12 +11,14 @@ use crate::typings::Type;
 
 pub mod printer;
 
+#[allow(dead_code)]
 #[derive(Debug, Clone, Copy)]
 pub enum DiagnosticKind {
     Error,
     Warning,
 }
 
+#[allow(dead_code)]
 #[derive(Debug, Clone)]
 pub struct Diagnostic {
     pub message: String,
@@ -53,6 +55,7 @@ impl DiagnosticsList {
         self.diagnostics.push(error);
     }
 
+    #[allow(dead_code)]
     pub fn report_warning(&mut self, message: String, span: TextSpan) {
         let warning = Diagnostic::new(message, span, DiagnosticKind::Warning);
         self.diagnostics.push(warning);
@@ -119,7 +122,7 @@ impl DiagnosticsList {
 
     pub fn report_cannot_return_outside_function(&mut self, token: &Token) {
         self.report_error(
-            format!("Cannot use 'return' outside of function scope"),
+            "Cannot use 'return' outside of function scope".to_string(),
             token.span.clone(),
         );
     }

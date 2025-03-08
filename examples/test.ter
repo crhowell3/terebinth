@@ -1,4 +1,5 @@
-let a: int = add(1, 2)
+let a: int = add(5, 3)
+a << 1
 func add(a: int, b: int) -> int {
 	return a + b
 }
