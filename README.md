@@ -39,19 +39,6 @@
       src="https://img.shields.io/github/contributors/crhowell3/terebinth?style=for-the-badge&logo=opensourceinitiative&color=689d6a&logoColor=d9e0ee&labelColor=282a36"
     />
   </a>
-  <br/>
-  <a href="#">
-    <img
-      alt="Documentation"
-      src="https://img.shields.io/docsrs/terebinth?style=for-the-badge&logo=docsdotrs&logoColor=d9e0ee&labelColor=282a36"
-    />
-  </a>
-  <a href="#">
-    <img
-      alt="Maintained"
-      src="https://img.shields.io/maintenance/yes/2025?style=for-the-badge&color=98971a&labelColor=282a36"
-    />
-  </a>
 </p>
 
 &nbsp;
