@@ -44,11 +44,7 @@ pub struct Parser<'a> {
 }
 
 impl<'a> Parser<'a> {
-    pub fn new(
-        tokens: Vec<Token>,
-        diagnostics_list: DiagnosticsListCell,
-        ast: &'a mut Ast,
-    ) -> Self {
+    pub fn new(tokens: &[Token], diagnostics_list: DiagnosticsListCell, ast: &'a mut Ast) -> Self {
         Self {
             tokens: tokens
                 .iter()
@@ -224,7 +220,7 @@ impl<'a> Parser<'a> {
             left = self.ast.binary_expression(operator, left, right).id;
         }
 
-        let left = self.ast.query_expr(&left);
+        let left = self.ast.query_expr(left);
         left
     }
 
@@ -284,7 +280,7 @@ impl<'a> Parser<'a> {
             }
             TokenKind::Identifier => {
                 if self.current().kind == TokenKind::LeftParen {
-                    self.parse_call_expression(token.clone())
+                    self.parse_call_expression(&token.clone())
                 } else {
                     self.ast.variable_expression(token)
                 }
@@ -302,7 +298,7 @@ impl<'a> Parser<'a> {
         }
     }
 
-    fn parse_call_expression(&mut self, identifier: Token) -> &AstExpression {
+    fn parse_call_expression(&mut self, identifier: &Token) -> &AstExpression {
         let left_paren = self.consume_and_check(TokenKind::LeftParen).clone();
         let mut arguments = Vec::new();
         while self.current().kind != TokenKind::RightParen && !self.is_at_end() {
@@ -317,7 +313,10 @@ impl<'a> Parser<'a> {
     }
 
     fn peek(&self, offset: isize) -> &Token {
-        let mut index = (self.current.get_value() as isize + offset) as usize;
+        let mut index =
+            usize::try_from(isize::try_from(self.current.get_value()).ok().unwrap() + offset)
+                .ok()
+                .unwrap();
         if index >= self.tokens.len() {
             index = self.tokens.len() - 1;
         }

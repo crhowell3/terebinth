@@ -1,6 +1,6 @@
 use std::fmt::{Display, Formatter};
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Copy)]
 pub enum Type {
     Int,
     Bool,
@@ -19,19 +19,16 @@ impl Display for Type {
             Type::Error => "?",
         };
 
-        write!(f, "{}", type_name)
+        write!(f, "{type_name}")
     }
 }
 
 impl Type {
-    pub fn is_assignable_to(&self, other: &Type) -> bool {
-        match (self, other) {
-            (Type::Int, Type::Int) => true,
-            (Type::Bool, Type::Bool) => true,
-            (Type::Error, _) => true,
-            (_, Type::Error) => true,
-            _ => false,
-        }
+    pub fn is_assignable_to(self, other: Type) -> bool {
+        matches!(
+            (self, other),
+            (Type::Int, Type::Int) | (Type::Bool, Type::Bool) | (Type::Error, _) | (_, Type::Error)
+        )
     }
 
     pub fn from_str(s: &str) -> Option<Type> {

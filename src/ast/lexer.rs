@@ -3,11 +3,14 @@
 //
 //     Licensed under the MIT License
 
-use std::fmt::{Display, Formatter};
+use std::{
+    collections::HashMap,
+    fmt::{Display, Formatter},
+};
 
 use crate::source::span::TextSpan;
 
-#[derive(Debug, PartialEq, Clone)]
+#[derive(Debug, PartialEq, Clone, Copy)]
 pub enum TokenKind {
     // Literals
     Number(i64),
@@ -137,14 +140,14 @@ impl<'a> Lexer<'a> {
         let c = self.current_char();
         c.map(|c| {
             let start: usize = self.current_pos;
-            let mut kind = TokenKind::Invalid;
-            if Self::is_number_start(&c) {
+            let kind;
+            if Self::is_number_start(c) {
                 let number: i64 = self.consume_number();
                 kind = TokenKind::Number(number);
-            } else if Self::is_whitespace(&c) {
+            } else if Self::is_whitespace(c) {
                 self.consume();
                 kind = TokenKind::Whitespace;
-            } else if Self::is_identifier_start(&c) {
+            } else if Self::is_identifier_start(c) {
                 let identifier = self.consume_identifier();
                 kind = match identifier.as_str() {
                     "let" => TokenKind::Let,
@@ -190,16 +193,24 @@ impl<'a> Lexer<'a> {
             '|' => TokenKind::Pipe,
             '^' => TokenKind::Caret,
             '~' => TokenKind::Tilde,
-            '<' => self.lex_potential_double_char_operator(
-                '=',
-                TokenKind::LessThan,
-                TokenKind::LessThanEquals,
-            ),
-            '>' => self.lex_potential_double_char_operator(
-                '=',
-                TokenKind::GreaterThan,
-                TokenKind::GreaterThanEquals,
-            ),
+            '<' => {
+                let mut kind_map = HashMap::new();
+                kind_map.insert('=', TokenKind::LessThanEquals);
+                kind_map.insert('<', TokenKind::DoubleLessThan);
+                self.lex_potential_double_char_operator_multiple_kinds(
+                    TokenKind::LessThan,
+                    &kind_map,
+                )
+            }
+            '>' => {
+                let mut kind_map = HashMap::new();
+                kind_map.insert('=', TokenKind::GreaterThanEquals);
+                kind_map.insert('>', TokenKind::DoubleGreaterThan);
+                self.lex_potential_double_char_operator_multiple_kinds(
+                    TokenKind::GreaterThan,
+                    &kind_map,
+                )
+            }
             '!' => self.lex_potential_double_char_operator(
                 '=',
                 TokenKind::Invalid,
@@ -210,6 +221,26 @@ impl<'a> Lexer<'a> {
             ',' => TokenKind::Comma,
             ':' => TokenKind::Colon,
             _ => TokenKind::Invalid,
+        }
+    }
+
+    fn lex_potential_double_char_operator_multiple_kinds(
+        &mut self,
+        one_char_kind: TokenKind,
+        double_char_kinds: &HashMap<char, TokenKind>,
+    ) -> TokenKind {
+        if let Some(next) = self.current_char() {
+            let mut kind = &one_char_kind;
+            for (expected, double_kind) in double_char_kinds {
+                if next == *expected {
+                    self.consume();
+                    kind = double_kind;
+                    break;
+                }
+            }
+            *kind
+        } else {
+            one_char_kind
         }
     }
 
@@ -231,15 +262,15 @@ impl<'a> Lexer<'a> {
         }
     }
 
-    fn is_number_start(c: &char) -> bool {
+    fn is_number_start(c: char) -> bool {
         c.is_ascii_digit()
     }
 
-    fn is_identifier_start(c: &char) -> bool {
+    fn is_identifier_start(c: char) -> bool {
         c.is_alphabetic()
     }
 
-    fn is_whitespace(c: &char) -> bool {
+    fn is_whitespace(c: char) -> bool {
         c.is_whitespace()
     }
 
@@ -260,7 +291,7 @@ impl<'a> Lexer<'a> {
     fn consume_identifier(&mut self) -> String {
         let mut identifier = String::new();
         while let Some(c) = self.current_char() {
-            if Self::is_identifier_start(&c) {
+            if Self::is_identifier_start(c) {
                 self.consume().unwrap();
                 identifier.push(c);
             } else {
@@ -275,7 +306,7 @@ impl<'a> Lexer<'a> {
         while let Some(c) = self.current_char() {
             if c.is_ascii_digit() {
                 self.consume().unwrap();
-                number = number * 10 + c.to_digit(10).unwrap() as i64;
+                number = number * 10 + i64::from(c.to_digit(10).unwrap());
             } else {
                 break;
             }
