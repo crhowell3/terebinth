@@ -2,26 +2,31 @@ use std::cell::RefCell;
 use std::collections::HashMap;
 use std::rc::Rc;
 
+use terebinth::{Idx, IdxVec, idx};
+
 use crate::ast::evaluator::AstEvaluator;
 use crate::ast::lexer::{Lexer, Token};
 use crate::ast::parser::Parser;
 use crate::ast::{
-    AstBinaryOperatorKind, AstBooleanExpression, AstCallExpression, AstExpression,
-    AstFuncDeclStatement, AstIfStatement, AstLetStatement, AstNumberExpression,
-    AstParenthesizedExpression, AstReturnStatement, AstStmtId, AstUnaryExpression,
-    AstUnaryOperatorKind, AstVariableExpression, AstWhileStatement,
+    BinaryOperatorKind, BooleanExpression, CallExpression, Expression, FuncDeclStatement,
+    IfStatement, LetStatement, NumberExpression, ParenthesizedExpression, ReturnStatement, StmtId,
+    UnaryExpression, UnaryOperatorKind, VariableExpression, WhileStatement,
 };
-use crate::ast::{AstBlockStatement, visitor::AstVisitor};
+use crate::ast::{BlockStatement, visitor::Visitor};
 use crate::source::span::TextSpan;
 use crate::typings::Type;
 use crate::{ast, diagnostics, source};
 use crate::{ast::Ast, diagnostics::DiagnosticsListCell};
 
+idx!(FunctionIndex);
+idx!(VariableIndex);
+
 #[derive(Debug, Clone)]
 pub struct FunctionSymbol {
     pub parameters: Vec<VariableSymbol>,
-    pub body: AstStmtId,
+    pub body: StmtId,
     pub return_type: Type,
+    pub name: String,
 }
 
 #[derive(Debug, Clone)]
@@ -31,52 +36,57 @@ pub struct VariableSymbol {
 }
 
 pub struct GlobalScope {
-    variables: HashMap<String, VariableSymbol>,
-    pub functions: HashMap<String, FunctionSymbol>,
+    variables: IdxVec<VariableIndex, VariableSymbol>,
+    pub functions: IdxVec<FunctionIndex, FunctionSymbol>,
 }
 
 impl GlobalScope {
     fn new() -> Self {
         GlobalScope {
-            variables: HashMap::new(),
-            functions: HashMap::new(),
+            variables: IdxVec::new(),
+            functions: IdxVec::new(),
         }
     }
 
-    fn declare_variable(&mut self, identifier: &str, var_type: Type) {
+    fn declare_variable(&mut self, identifier: &str, var_type: Type) -> VariableIndex {
         let variable = VariableSymbol {
             name: identifier.to_string(),
             var_type,
         };
-        self.variables.insert(identifier.to_string(), variable);
+        self.variables.push(variable)
     }
 
     fn lookup_variable(&self, identifier: &str) -> Option<&VariableSymbol> {
-        self.variables.get(identifier)
+        self.variables
+            .iter()
+            .find(|variable| variable.name == identifier)
     }
 
     fn declare_function(
         &mut self,
         identifier: &str,
-        function_body: AstStmtId,
+        function_body: StmtId,
         parameters: Vec<VariableSymbol>,
         return_type: Type,
     ) -> Result<(), ()> {
-        if self.functions.contains_key(identifier) {
+        if self.lookup_function(identifier).is_some() {
             return Err(());
         }
         let function = FunctionSymbol {
             parameters,
             body: function_body,
             return_type,
+            name: identifier.to_string(),
         };
 
-        self.functions.insert(identifier.to_string(), function);
+        self.functions.push(function);
         Ok(())
     }
 
     pub fn lookup_function(&self, identifier: &str) -> Option<&FunctionSymbol> {
-        self.functions.get(identifier)
+        self.functions
+            .iter()
+            .find(|function| function.name == identifier)
     }
 }
 
@@ -197,7 +207,7 @@ impl<'a> Resolver<'a> {
     }
 
     pub fn resolve(&mut self) {
-        let stmt_ids: Vec<AstStmtId> = self.ast.top_level_statements.clone();
+        let stmt_ids: Vec<StmtId> = self.ast.top_level_statements.clone();
         for stmt_id in stmt_ids {
             self.visit_statement(stmt_id);
         }
@@ -205,27 +215,27 @@ impl<'a> Resolver<'a> {
 
     pub fn resolve_binary_expression(
         &self,
-        left: &AstExpression,
-        right: &AstExpression,
-        operator: &AstBinaryOperatorKind,
+        left: &Expression,
+        right: &Expression,
+        operator: &BinaryOperatorKind,
     ) -> Type {
         let matrix: (Type, Type, Type) = match operator {
-            AstBinaryOperatorKind::Plus
-            | AstBinaryOperatorKind::Minus
-            | AstBinaryOperatorKind::Multiply
-            | AstBinaryOperatorKind::Divide
-            | AstBinaryOperatorKind::Power
-            | AstBinaryOperatorKind::BitwiseAnd
-            | AstBinaryOperatorKind::BitwiseOr
-            | AstBinaryOperatorKind::BitwiseXor
-            | AstBinaryOperatorKind::LeftShift
-            | AstBinaryOperatorKind::RightShift => (Type::Int, Type::Int, Type::Int),
-            AstBinaryOperatorKind::Equals
-            | AstBinaryOperatorKind::NotEquals
-            | AstBinaryOperatorKind::LessThan
-            | AstBinaryOperatorKind::LessThanOrEqual
-            | AstBinaryOperatorKind::GreaterThan
-            | AstBinaryOperatorKind::GreaterThanOrEqual => (Type::Int, Type::Int, Type::Bool),
+            BinaryOperatorKind::Plus
+            | BinaryOperatorKind::Minus
+            | BinaryOperatorKind::Multiply
+            | BinaryOperatorKind::Divide
+            | BinaryOperatorKind::Power
+            | BinaryOperatorKind::BitwiseAnd
+            | BinaryOperatorKind::BitwiseOr
+            | BinaryOperatorKind::BitwiseXor
+            | BinaryOperatorKind::LeftShift
+            | BinaryOperatorKind::RightShift => (Type::Int, Type::Int, Type::Int),
+            BinaryOperatorKind::Equals
+            | BinaryOperatorKind::NotEquals
+            | BinaryOperatorKind::LessThan
+            | BinaryOperatorKind::LessThanOrEqual
+            | BinaryOperatorKind::GreaterThan
+            | BinaryOperatorKind::GreaterThanOrEqual => (Type::Int, Type::Int, Type::Bool),
         };
 
         self.expect_type(matrix.0, left.expr_type, &left.span(self.ast));
@@ -240,13 +250,11 @@ impl<'a> Resolver<'a> {
 
     pub fn resolve_unary_expression(
         &self,
-        operand: &AstExpression,
-        operator: &AstUnaryOperatorKind,
+        operand: &Expression,
+        operator: &UnaryOperatorKind,
     ) -> Type {
         let matrix: (Type, Type) = match operator {
-            AstUnaryOperatorKind::Minus | AstUnaryOperatorKind::BitwiseNot => {
-                (Type::Int, Type::Int)
-            }
+            UnaryOperatorKind::Minus | UnaryOperatorKind::BitwiseNot => (Type::Int, Type::Int),
         };
 
         self.expect_type(matrix.0, operand.expr_type, &operand.span(self.ast));
@@ -283,12 +291,12 @@ impl<'a> GlobalSymbolResolver<'a> {
     }
 }
 
-impl AstVisitor for GlobalSymbolResolver<'_> {
+impl Visitor for GlobalSymbolResolver<'_> {
     fn get_ast(&self) -> &Ast {
         self.ast
     }
 
-    fn visit_func_decl_statement(&mut self, func_decl_statement: &AstFuncDeclStatement) {
+    fn visit_func_decl_statement(&mut self, func_decl_statement: &FuncDeclStatement) {
         let parameters = func_decl_statement
             .parameters
             .iter()
@@ -322,36 +330,30 @@ impl AstVisitor for GlobalSymbolResolver<'_> {
         }
     }
 
-    fn visit_let_statement(&mut self, _let_statement: &ast::AstLetStatement) {}
+    fn visit_let_statement(&mut self, _let_statement: &ast::LetStatement) {}
 
     fn visit_variable_expression(
         &mut self,
-        _variable_expression: &AstVariableExpression,
-        _expr: &AstExpression,
+        _variable_expression: &VariableExpression,
+        _expr: &Expression,
     ) {
     }
 
-    fn visit_number_expression(&mut self, _number: &AstNumberExpression, _expr: &AstExpression) {}
+    fn visit_number_expression(&mut self, _number: &NumberExpression, _expr: &Expression) {}
 
-    fn visit_boolean_expression(&mut self, _boolean: &AstBooleanExpression, _expr: &AstExpression) {
-    }
+    fn visit_boolean_expression(&mut self, _boolean: &BooleanExpression, _expr: &Expression) {}
 
     fn visit_error(&mut self, _span: &TextSpan) {}
 
-    fn visit_unary_expression(
-        &mut self,
-        _unary_expression: &AstUnaryExpression,
-        _expr: &AstExpression,
-    ) {
-    }
+    fn visit_unary_expression(&mut self, _unary_expression: &UnaryExpression, _expr: &Expression) {}
 }
 
-impl AstVisitor for Resolver<'_> {
+impl Visitor for Resolver<'_> {
     fn get_ast(&self) -> &Ast {
         self.ast
     }
 
-    fn visit_func_decl_statement(&mut self, func_decl_statement: &AstFuncDeclStatement) {
+    fn visit_func_decl_statement(&mut self, func_decl_statement: &FuncDeclStatement) {
         let function_symbol = self
             .scopes
             .lookup_function(&func_decl_statement.identifier.span.literal)
@@ -366,7 +368,7 @@ impl AstVisitor for Resolver<'_> {
         self.scopes.exit_scope();
     }
 
-    fn visit_return_statement(&mut self, return_statement: &AstReturnStatement) {
+    fn visit_return_statement(&mut self, return_statement: &ReturnStatement) {
         let return_keyword = return_statement.return_keyword.clone();
         match self.scopes.surrounding_function().cloned() {
             None => {
@@ -390,14 +392,14 @@ impl AstVisitor for Resolver<'_> {
         }
     }
 
-    fn visit_while_statement(&mut self, while_statement: &AstWhileStatement) {
+    fn visit_while_statement(&mut self, while_statement: &WhileStatement) {
         self.visit_expression(while_statement.condition);
         let condition = self.ast.query_expr(while_statement.condition);
         self.expect_type(Type::Bool, condition.expr_type, &condition.span(self.ast));
         self.visit_statement(while_statement.body);
     }
 
-    fn visit_block_statement(&mut self, block_statement: &AstBlockStatement) {
+    fn visit_block_statement(&mut self, block_statement: &BlockStatement) {
         self.scopes.enter_scope(None);
         for statement in &block_statement.statements {
             self.visit_statement(*statement);
@@ -405,7 +407,7 @@ impl AstVisitor for Resolver<'_> {
         self.scopes.exit_scope();
     }
 
-    fn visit_if_statement(&mut self, if_statement: &AstIfStatement) {
+    fn visit_if_statement(&mut self, if_statement: &IfStatement) {
         self.scopes.enter_scope(None);
         self.visit_expression(if_statement.condition);
         let condition_expression = self.ast.query_expr(if_statement.condition);
@@ -423,7 +425,7 @@ impl AstVisitor for Resolver<'_> {
         }
     }
 
-    fn visit_let_statement(&mut self, let_statement: &AstLetStatement) {
+    fn visit_let_statement(&mut self, let_statement: &LetStatement) {
         let identifier = let_statement.identifier.span.literal.clone();
         self.visit_expression(let_statement.initializer);
         let initializer_expression = self.ast.query_expr(let_statement.initializer);
@@ -444,8 +446,8 @@ impl AstVisitor for Resolver<'_> {
 
     fn visit_variable_expression(
         &mut self,
-        variable_expression: &AstVariableExpression,
-        expr: &AstExpression,
+        variable_expression: &VariableExpression,
+        expr: &Expression,
     ) {
         match self
             .scopes
@@ -461,17 +463,13 @@ impl AstVisitor for Resolver<'_> {
         }
     }
 
-    fn visit_number_expression(&mut self, _number: &AstNumberExpression, expr: &AstExpression) {
+    fn visit_number_expression(&mut self, _number: &NumberExpression, expr: &Expression) {
         self.ast.set_type(expr.id, Type::Int);
     }
 
     fn visit_error(&mut self, _span: &TextSpan) {}
 
-    fn visit_unary_expression(
-        &mut self,
-        unary_expression: &AstUnaryExpression,
-        expr: &AstExpression,
-    ) {
+    fn visit_unary_expression(&mut self, unary_expression: &UnaryExpression, expr: &Expression) {
         self.visit_expression(unary_expression.operand);
         let operand = self.ast.query_expr(unary_expression.operand);
         let ty = self.resolve_unary_expression(operand, &unary_expression.operator.kind);
@@ -480,8 +478,8 @@ impl AstVisitor for Resolver<'_> {
 
     fn visit_binary_expression(
         &mut self,
-        binary_expression: &ast::AstBinaryExpression,
-        expr: &AstExpression,
+        binary_expression: &ast::BinaryExpression,
+        expr: &Expression,
     ) {
         self.visit_expression(binary_expression.left);
         self.visit_expression(binary_expression.right);
@@ -494,8 +492,8 @@ impl AstVisitor for Resolver<'_> {
 
     fn visit_parenthesized_expression(
         &mut self,
-        parenthesized_expression: &AstParenthesizedExpression,
-        expr: &AstExpression,
+        parenthesized_expression: &ParenthesizedExpression,
+        expr: &Expression,
     ) {
         self.visit_expression(parenthesized_expression.expression);
 
@@ -504,10 +502,9 @@ impl AstVisitor for Resolver<'_> {
         self.ast.set_type(expr.id, expression.expr_type);
     }
 
-    fn visit_boolean_expression(&mut self, _boolean: &AstBooleanExpression, _expr: &AstExpression) {
-    }
+    fn visit_boolean_expression(&mut self, _boolean: &BooleanExpression, _expr: &Expression) {}
 
-    fn visit_call_expression(&mut self, call_expression: &AstCallExpression, expr: &AstExpression) {
+    fn visit_call_expression(&mut self, call_expression: &CallExpression, expr: &Expression) {
         let function = self
             .scopes
             .lookup_function(&call_expression.identifier.span.literal)
