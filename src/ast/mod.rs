@@ -497,6 +497,12 @@ pub enum AstBinaryOperatorKind {
     GreaterThanOrEqual,
 }
 
+#[derive(Debug, Clone, PartialEq)]
+pub enum AstBinaryOperatorAssociativity {
+    Left,
+    Right,
+}
+
 #[derive(Debug, Clone)]
 pub struct AstBinaryOperator {
     pub kind: AstBinaryOperatorKind,
@@ -522,6 +528,13 @@ impl AstBinaryOperator {
             AstBinaryOperatorKind::BitwiseAnd => 16,
             AstBinaryOperatorKind::BitwiseXor => 15,
             AstBinaryOperatorKind::BitwiseOr => 14,
+        }
+    }
+
+    pub fn associativity(&self) -> AstBinaryOperatorAssociativity {
+        match self.kind {
+            AstBinaryOperatorKind::Power => AstBinaryOperatorAssociativity::Right,
+            _ => AstBinaryOperatorAssociativity::Left,
         }
     }
 }

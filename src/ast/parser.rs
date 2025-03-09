@@ -8,9 +8,9 @@ use std::cell::Cell;
 use crate::diagnostics::DiagnosticsListCell;
 
 use super::{
-    Ast, AstBinaryOperator, AstBinaryOperatorKind, AstElseStatement, AstExpression,
-    AstFuncDeclParameter, AstFunctionReturnType, AstStatement, AstUnaryOperator,
-    AstUnaryOperatorKind, StaticTypeAnnotation,
+    Ast, AstBinaryOperator, AstBinaryOperatorAssociativity, AstBinaryOperatorKind,
+    AstElseStatement, AstExprId, AstExpression, AstFuncDeclParameter, AstFunctionReturnType,
+    AstStatement, AstUnaryOperator, AstUnaryOperatorKind, StaticTypeAnnotation,
     lexer::{Token, TokenKind},
 };
 
@@ -208,20 +208,44 @@ impl<'a> Parser<'a> {
     }
 
     fn parse_binary_expression(&mut self, precedence: u8) -> &AstExpression {
-        let mut left = self.parse_unary_expression().id;
+        let left = self.parse_unary_expression().id;
+        self.parse_binary_expression_recurse(left, precedence)
+    }
 
+    fn parse_binary_expression_recurse(
+        &mut self,
+        mut left: AstExprId,
+        precedence: u8,
+    ) -> &AstExpression {
         while let Some(operator) = self.parse_binary_operator() {
             let operator_precedence = operator.precedence();
             if operator_precedence < precedence {
                 break;
             }
             self.consume();
-            let right = self.parse_binary_expression(operator_precedence).id;
+            let mut right = self.parse_unary_expression().id;
+
+            while let Some(inner_operator) = self.parse_binary_operator() {
+                let greater_precedence = inner_operator.precedence() > operator.precedence();
+                let equal_precedence = inner_operator.precedence() == operator.precedence();
+                if !(greater_precedence
+                    || equal_precedence
+                        && inner_operator.associativity() == AstBinaryOperatorAssociativity::Right)
+                {
+                    break;
+                }
+
+                right = self
+                    .parse_binary_expression_recurse(
+                        right,
+                        std::cmp::max(operator.precedence(), inner_operator.precedence()),
+                    )
+                    .id;
+            }
             left = self.ast.binary_expression(operator, left, right).id;
         }
 
-        let left = self.ast.query_expr(left);
-        left
+        self.ast.query_expr(left)
     }
 
     fn parse_unary_expression(&mut self) -> &AstExpression {
