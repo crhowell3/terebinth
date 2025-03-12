@@ -35,6 +35,7 @@ impl<Index, T> IdxVec<Index, T>
 where
     Index: Idx,
 {
+    #[must_use]
     pub fn new() -> Self {
         Self {
             vec: vec![],
@@ -59,7 +60,16 @@ where
             .map(|(index, value)| (Index::new(index), value))
     }
 
-    pub fn get(&self, index: Index) -> &T {
+    pub fn get(&self, index: &Index) -> &T {
         &self.vec[index.as_idx()]
+    }
+}
+
+impl<Index, T> Default for IdxVec<Index, T>
+where
+    Index: Idx,
+{
+    fn default() -> Self {
+        Self::new()
     }
 }

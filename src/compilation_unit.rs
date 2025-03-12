@@ -105,7 +105,7 @@ impl LocalScope {
 }
 
 struct Scopes {
-    local_scopes: Vec<LocalScope>,
+    local_scopes_vec: Vec<LocalScope>,
     global_scope: GlobalScope,
     surrounding_function: Option<FunctionIndex>,
 }
@@ -114,7 +114,7 @@ struct Scopes {
 impl Scopes {
     fn new() -> Self {
         Scopes {
-            local_scopes: Vec::new(),
+            local_scopes_vec: Vec::new(),
             global_scope: GlobalScope::new(),
             surrounding_function: None,
         }
@@ -122,7 +122,7 @@ impl Scopes {
 
     fn from_global_scope(global_scope: GlobalScope) -> Self {
         Scopes {
-            local_scopes: Vec::new(),
+            local_scopes_vec: Vec::new(),
             global_scope,
             surrounding_function: None,
         }
@@ -134,7 +134,7 @@ impl Scopes {
     }
 
     fn enter_scope(&mut self) {
-        self.local_scopes.push(LocalScope::new());
+        self.local_scopes_vec.push(LocalScope::new());
     }
 
     fn exit_function_scope(&mut self) {
@@ -143,7 +143,7 @@ impl Scopes {
     }
 
     fn exit_scope(&mut self) {
-        self.local_scopes.pop();
+        self.local_scopes_vec.pop();
     }
 
     fn declare_variable(&mut self, identifier: &str, var_type: Type) {
@@ -154,11 +154,11 @@ impl Scopes {
     }
 
     fn lookup_variable(&self, identifier: &str) -> Option<&VariableSymbol> {
-        for scope in self.local_scopes.iter().rev() {
+        for scope in self.local_scopes_vec.iter().rev() {
             if let Some(variable) = scope
                 .locals
                 .iter()
-                .map(|idx| self.global_scope.variables.get(*idx))
+                .map(|idx| self.global_scope.variables.get(idx))
                 .find(|variable| variable.name == identifier)
             {
                 return Some(variable);
@@ -172,16 +172,16 @@ impl Scopes {
     }
 
     fn is_inside_local_scope(&self) -> bool {
-        !self.local_scopes.is_empty()
+        !self.local_scopes_vec.is_empty()
     }
 
     fn surrounding_function(&self) -> Option<&FunctionSymbol> {
         self.surrounding_function
-            .map(|idx| self.global_scope.functions.get(idx))
+            .map(|idx| self.global_scope.functions.get(&idx))
     }
 
     fn current_local_scope_mut(&mut self) -> &mut LocalScope {
-        self.local_scopes.last_mut().unwrap()
+        self.local_scopes_vec.last_mut().unwrap()
     }
 }
 
@@ -361,10 +361,9 @@ impl Visitor for Resolver<'_> {
         let function_id = self
             .scopes
             .lookup_function(&func_decl_statement.identifier.span.literal)
-            .unwrap()
-            .clone();
+            .unwrap();
         self.scopes.enter_function_scope(function_id);
-        let function = self.scopes.global_scope.functions.get(function_id);
+        let function = self.scopes.global_scope.functions.get(&function_id);
         for parameter in function.parameters.clone() {
             self.scopes.current_local_scope_mut().locals.push(parameter);
         }
@@ -503,8 +502,7 @@ impl Visitor for Resolver<'_> {
     fn visit_call_expression(&mut self, call_expression: &CallExpr, expr: &Expression) {
         let function = self
             .scopes
-            .lookup_function(&call_expression.identifier.span.literal)
-            .map(|function| function.clone());
+            .lookup_function(&call_expression.identifier.span.literal);
         let ty = match function {
             None => {
                 let mut diagnostics_binding = self.diagnostics.borrow_mut();
@@ -512,7 +510,7 @@ impl Visitor for Resolver<'_> {
                 Type::Void
             }
             Some(function) => {
-                let function = self.scopes.global_scope.functions.get(function);
+                let function = self.scopes.global_scope.functions.get(&function);
                 if function.parameters.len() != call_expression.arguments.len() {
                     let mut diagnostics_binding = self.diagnostics.borrow_mut();
                     diagnostics_binding.report_invalid_argument_count(
@@ -529,7 +527,7 @@ impl Visitor for Resolver<'_> {
                 {
                     self.visit_expression(*argument);
                     let argument_expression = self.ast.query_expr(*argument);
-                    let param = self.scopes.global_scope.variables.get(*param);
+                    let param = self.scopes.global_scope.variables.get(param);
                     self.expect_type(
                         param.var_type,
                         argument_expression.expr_type,
@@ -589,7 +587,7 @@ impl CompilationUnit {
         let mut eval = AstEvaluator::new(&self.global_scope, &self.ast);
         let main_function = self.global_scope.lookup_function("main");
         if let Some(function) = main_function {
-            let function = self.global_scope.functions.get(function);
+            let function = self.global_scope.functions.get(&function);
             eval.visit_statement(function.body);
         } else {
             self.ast.visit(&mut eval);

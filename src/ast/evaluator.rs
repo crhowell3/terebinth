@@ -29,8 +29,8 @@ impl Frame {
         self.variables.insert(idx, value);
     }
 
-    fn get(&self, idx: &VariableIndex) -> Option<&i64> {
-        self.variables.get(idx)
+    fn get(&self, idx: VariableIndex) -> Option<&i64> {
+        self.variables.get(&idx)
     }
 }
 
@@ -66,7 +66,7 @@ impl Frames {
         self.frames.last_mut().unwrap().insert(idx, value);
     }
 
-    fn get(&self, idx: &VariableIndex) -> Option<&i64> {
+    fn get(&self, idx: VariableIndex) -> Option<&i64> {
         for frame in self.frames.iter().rev() {
             if let Some(value) = frame.get(idx) {
                 return Some(value);
@@ -211,7 +211,7 @@ impl Visitor for AstEvaluator<'_> {
         self.last_value = Some(
             *self
                 .frames
-                .get(&variable_expression.variable_idx)
+                .get(variable_expression.variable_idx)
                 .unwrap_or_else(|| panic!("Variable {identifier} not found")),
         );
     }
@@ -221,7 +221,7 @@ impl Visitor for AstEvaluator<'_> {
             .global_scope
             .lookup_function(&call_expression.identifier.span.literal)
             .unwrap();
-        let function = self.global_scope.functions.get(function_idx);
+        let function = self.global_scope.functions.get(&function_idx);
         let mut arguments = Vec::new();
         for argument in &call_expression.arguments {
             self.visit_expression(*argument);
