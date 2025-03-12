@@ -5,18 +5,17 @@
 
 use std::collections::HashMap;
 
-use crate::compilation_unit::GlobalScope;
+use crate::compilation_unit::{GlobalScope, VariableIndex};
 
 use super::{
-    AssignmentExpression, Ast, BinaryExpression, BinaryOperatorKind, BlockStatement,
-    BooleanExpression, CallExpression, Expression, FuncDeclStatement, IfStatement, LetStatement,
-    NumberExpression, ParenthesizedExpression, UnaryExpression, UnaryOperatorKind,
-    VariableExpression, Visitor, WhileStatement,
+    AssignmentExpr, Ast, BinaryExpr, BinaryOperatorKind, BlockStmt, BooleanExpr, CallExpr,
+    Expression, FunctionDeclaration, IfStmt, LetStmt, NumberExpr, ParenthesizedExpr, UnaryExpr,
+    UnaryOperatorKind, VariableExpr, Visitor, WhileStmt,
 };
 use crate::source::span::TextSpan;
 
 pub struct Frame {
-    variables: HashMap<String, i64>,
+    variables: HashMap<VariableIndex, i64>,
 }
 
 impl Frame {
@@ -26,12 +25,12 @@ impl Frame {
         }
     }
 
-    fn insert(&mut self, identifier: String, value: i64) {
-        self.variables.insert(identifier, value);
+    fn insert(&mut self, idx: VariableIndex, value: i64) {
+        self.variables.insert(idx, value);
     }
 
-    fn get(&self, identifier: &String) -> Option<&i64> {
-        self.variables.get(identifier)
+    fn get(&self, idx: &VariableIndex) -> Option<&i64> {
+        self.variables.get(idx)
     }
 }
 
@@ -54,23 +53,22 @@ impl Frames {
         self.frames.pop();
     }
 
-    fn update(&mut self, identifier: String, value: i64) {
+    fn update(&mut self, idx: VariableIndex, value: i64) {
         for frame in self.frames.iter_mut().rev() {
-            if frame.variables.contains_key(&identifier) {
-                frame.insert(identifier, value);
+            if frame.variables.contains_key(&idx) {
+                frame.insert(idx, value);
                 return;
             }
         }
-        panic!("Variable {identifier} not found")
     }
 
-    fn insert(&mut self, identifier: String, value: i64) {
-        self.frames.last_mut().unwrap().insert(identifier, value);
+    fn insert(&mut self, idx: VariableIndex, value: i64) {
+        self.frames.last_mut().unwrap().insert(idx, value);
     }
 
-    fn get(&self, identifier: &String) -> Option<&i64> {
+    fn get(&self, idx: &VariableIndex) -> Option<&i64> {
         for frame in self.frames.iter().rev() {
-            if let Some(value) = frame.get(identifier) {
+            if let Some(value) = frame.get(idx) {
                 return Some(value);
             }
         }
@@ -117,9 +115,9 @@ impl Visitor for AstEvaluator<'_> {
         self.ast
     }
 
-    fn visit_func_decl_statement(&mut self, _func_decl_statement: &FuncDeclStatement) {}
+    fn visit_func_decl_statement(&mut self, _func_decl_statement: &FunctionDeclaration) {}
 
-    fn visit_if_statement(&mut self, if_statement: &IfStatement) {
+    fn visit_if_statement(&mut self, if_statement: &IfStmt) {
         self.push_frame();
         self.visit_expression(if_statement.condition);
         if self.last_value.unwrap() != 0 {
@@ -134,7 +132,7 @@ impl Visitor for AstEvaluator<'_> {
         self.pop_frame();
     }
 
-    fn visit_number_expression(&mut self, number: &NumberExpression, _expr: &Expression) {
+    fn visit_number_expression(&mut self, number: &NumberExpr, _expr: &Expression) {
         self.last_value = Some(number.number);
     }
 
@@ -142,7 +140,7 @@ impl Visitor for AstEvaluator<'_> {
         todo!()
     }
 
-    fn visit_unary_expression(&mut self, unary_expression: &UnaryExpression, _expr: &Expression) {
+    fn visit_unary_expression(&mut self, unary_expression: &UnaryExpr, _expr: &Expression) {
         self.visit_expression(unary_expression.operand);
         let operand = self.last_value.unwrap();
         self.last_value = Some(match unary_expression.operator.kind {
@@ -151,7 +149,7 @@ impl Visitor for AstEvaluator<'_> {
         });
     }
 
-    fn visit_binary_expression(&mut self, binary_expr: &BinaryExpression, _expr: &Expression) {
+    fn visit_binary_expression(&mut self, binary_expr: &BinaryExpr, _expr: &Expression) {
         self.visit_expression(binary_expr.left);
         let left = self.last_value.unwrap();
         self.visit_expression(binary_expr.right);
@@ -180,7 +178,7 @@ impl Visitor for AstEvaluator<'_> {
         });
     }
 
-    fn visit_while_statement(&mut self, while_statement: &WhileStatement) {
+    fn visit_while_statement(&mut self, while_statement: &WhileStmt) {
         self.push_frame();
         self.visit_expression(while_statement.condition);
         while self.last_value.unwrap() != 0 {
@@ -190,7 +188,7 @@ impl Visitor for AstEvaluator<'_> {
         self.pop_frame();
     }
 
-    fn visit_block_statement(&mut self, block_statement: &BlockStatement) {
+    fn visit_block_statement(&mut self, block_statement: &BlockStmt) {
         self.push_frame();
         for statement in &block_statement.statements {
             self.visit_statement(*statement);
@@ -198,33 +196,32 @@ impl Visitor for AstEvaluator<'_> {
         self.pop_frame();
     }
 
-    fn visit_let_statement(&mut self, let_statement: &LetStatement) {
+    fn visit_let_statement(&mut self, let_statement: &LetStmt) {
         self.visit_expression(let_statement.initializer);
-        self.frames.insert(
-            let_statement.identifier.span.literal.clone(),
-            self.last_value.unwrap(),
-        );
+        self.frames
+            .insert(let_statement.variable_idx, self.last_value.unwrap());
     }
 
     fn visit_variable_expression(
         &mut self,
-        variable_expression: &VariableExpression,
+        variable_expression: &VariableExpr,
         _expr: &Expression,
     ) {
         let identifier = &variable_expression.identifier.span.literal;
         self.last_value = Some(
             *self
                 .frames
-                .get(identifier)
+                .get(&variable_expression.variable_idx)
                 .unwrap_or_else(|| panic!("Variable {identifier} not found")),
         );
     }
 
-    fn visit_call_expression(&mut self, call_expression: &CallExpression, _expr: &Expression) {
-        let function = self
+    fn visit_call_expression(&mut self, call_expression: &CallExpr, _expr: &Expression) {
+        let function_idx = self
             .global_scope
             .lookup_function(&call_expression.identifier.span.literal)
             .unwrap();
+        let function = self.global_scope.functions.get(function_idx);
         let mut arguments = Vec::new();
         for argument in &call_expression.arguments {
             self.visit_expression(*argument);
@@ -232,8 +229,7 @@ impl Visitor for AstEvaluator<'_> {
         }
         self.push_frame();
         for (argument, param) in arguments.iter().zip(function.parameters.iter()) {
-            let parameter_name = param.name.clone();
-            self.frames.insert(parameter_name, *argument);
+            self.frames.insert(*param, *argument);
         }
 
         self.visit_statement(function.body);
@@ -242,7 +238,7 @@ impl Visitor for AstEvaluator<'_> {
 
     fn visit_parenthesized_expression(
         &mut self,
-        parenthesized_expression: &ParenthesizedExpression,
+        parenthesized_expression: &ParenthesizedExpr,
         _expr: &Expression,
     ) {
         self.visit_expression(parenthesized_expression.expression);
@@ -250,16 +246,15 @@ impl Visitor for AstEvaluator<'_> {
 
     fn visit_assignment_expression(
         &mut self,
-        assignment_expression: &AssignmentExpression,
+        assignment_expression: &AssignmentExpr,
         _expr: &Expression,
     ) {
-        let identifier = &assignment_expression.identifier.span.literal;
         self.visit_expression(assignment_expression.expression);
         self.frames
-            .update(identifier.clone(), self.last_value.unwrap());
+            .update(assignment_expression.variable_idx, self.last_value.unwrap());
     }
 
-    fn visit_boolean_expression(&mut self, boolean: &BooleanExpression, _expr: &Expression) {
+    fn visit_boolean_expression(&mut self, boolean: &BooleanExpr, _expr: &Expression) {
         self.last_value = Some(i64::from(boolean.value));
     }
 }

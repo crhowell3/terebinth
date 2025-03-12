@@ -51,4 +51,15 @@ where
     pub fn iter(&self) -> impl Iterator<Item = &T> {
         self.vec.iter()
     }
+
+    pub fn indexed_iter(&self) -> impl Iterator<Item = (Index, &T)> {
+        self.vec
+            .iter()
+            .enumerate()
+            .map(|(index, value)| (Index::new(index), value))
+    }
+
+    pub fn get(&self, index: Index) -> &T {
+        &self.vec[index.as_idx()]
+    }
 }

@@ -3,10 +3,10 @@ use termion::color;
 use crate::source::span::TextSpan;
 
 use crate::ast::{
-    AssignmentExpression, Ast, BinaryExpression, BlockStatement, BooleanExpression, CallExpression,
-    Expression, Fg, FuncDeclStatement, IfStatement, LetStatement, NumberExpression,
-    ParenthesizedExpression, Reset, ReturnStatement, StaticTypeAnnotation, StmtId, UnaryExpression,
-    VariableExpression, Visitor, WhileStatement,
+    AssignmentExpr, Ast, BinaryExpr, BlockStmt, BooleanExpr, CallExpr,
+    Expression, Fg, FunctionDeclaration, IfStmt, LetStmt, NumberExpr,
+    ParenthesizedExpr, Reset, ReturnStmt, StaticTypeAnnotation, StmtId, UnaryExpr,
+    VariableExpr, Visitor, WhileStmt,
 };
 
 pub struct Printer<'a> {
@@ -82,7 +82,7 @@ impl Visitor for Printer<'_> {
         self.ast
     }
 
-    fn visit_call_expression(&mut self, call_expression: &CallExpression, _expr: &Expression) {
+    fn visit_call_expression(&mut self, call_expression: &CallExpr, _expr: &Expression) {
         self.add_text(&call_expression.identifier.span.literal);
         self.add_text("(");
         for (i, argument) in call_expression.arguments.iter().enumerate() {
@@ -95,7 +95,7 @@ impl Visitor for Printer<'_> {
         self.add_text(")");
     }
 
-    fn visit_return_statement(&mut self, return_statement: &ReturnStatement) {
+    fn visit_return_statement(&mut self, return_statement: &ReturnStmt) {
         self.add_keyword("return");
         if let Some(expr) = &return_statement.return_value {
             self.add_whitespace();
@@ -103,7 +103,7 @@ impl Visitor for Printer<'_> {
         }
     }
 
-    fn visit_func_decl_statement(&mut self, func_decl_statement: &FuncDeclStatement) {
+    fn visit_func_decl_statement(&mut self, func_decl_statement: &FunctionDeclaration) {
         self.add_keyword("func");
         self.add_whitespace();
         self.add_text(&func_decl_statement.identifier.span.literal);
@@ -127,11 +127,11 @@ impl Visitor for Printer<'_> {
         self.visit_statement(func_decl_statement.body);
     }
 
-    fn visit_boolean_expression(&mut self, boolean: &BooleanExpression, _expr: &Expression) {
+    fn visit_boolean_expression(&mut self, boolean: &BooleanExpr, _expr: &Expression) {
         self.add_boolean_literal(boolean.value);
     }
 
-    fn visit_while_statement(&mut self, while_statement: &WhileStatement) {
+    fn visit_while_statement(&mut self, while_statement: &WhileStmt) {
         self.add_keyword("while");
         self.add_whitespace();
         self.visit_expression(while_statement.condition);
@@ -139,7 +139,7 @@ impl Visitor for Printer<'_> {
         self.visit_statement(while_statement.body);
     }
 
-    fn visit_if_statement(&mut self, if_statement: &IfStatement) {
+    fn visit_if_statement(&mut self, if_statement: &IfStmt) {
         self.add_keyword("if");
         self.add_whitespace();
         self.visit_expression(if_statement.condition);
@@ -152,7 +152,7 @@ impl Visitor for Printer<'_> {
         }
     }
 
-    fn visit_let_statement(&mut self, let_statement: &LetStatement) {
+    fn visit_let_statement(&mut self, let_statement: &LetStmt) {
         self.add_keyword("let");
         self.add_whitespace();
         self.add_text(let_statement.identifier.span.literal.as_str());
@@ -167,7 +167,7 @@ impl Visitor for Printer<'_> {
 
     fn visit_assignment_expression(
         &mut self,
-        assignment_expression: &AssignmentExpression,
+        assignment_expression: &AssignmentExpr,
         _expr: &Expression,
     ) {
         self.add_variable(assignment_expression.identifier.span.literal.as_str());
@@ -183,7 +183,7 @@ impl Visitor for Printer<'_> {
         self.result.push_str(&format!("{}\n", Fg(Reset)));
     }
 
-    fn visit_block_statement(&mut self, block_statement: &BlockStatement) {
+    fn visit_block_statement(&mut self, block_statement: &BlockStmt) {
         self.add_text("{");
         self.add_newline();
         self.indent += 1;
@@ -195,7 +195,7 @@ impl Visitor for Printer<'_> {
         self.add_text("}");
     }
 
-    fn visit_number_expression(&mut self, number: &NumberExpression, _expr: &Expression) {
+    fn visit_number_expression(&mut self, number: &NumberExpr, _expr: &Expression) {
         self.result
             .push_str(&format!("{}{}", Self::NUMBER_COLOR.fg_str(), number.number));
     }
@@ -205,7 +205,7 @@ impl Visitor for Printer<'_> {
             .push_str(&format!("{}{}", Self::TEXT_COLOR.fg_str(), span.literal));
     }
 
-    fn visit_unary_expression(&mut self, unary_expression: &UnaryExpression, _expr: &Expression) {
+    fn visit_unary_expression(&mut self, unary_expression: &UnaryExpr, _expr: &Expression) {
         self.result.push_str(&format!(
             "{}{}",
             Self::TEXT_COLOR.fg_str(),
@@ -216,7 +216,7 @@ impl Visitor for Printer<'_> {
 
     fn visit_binary_expression(
         &mut self,
-        binary_expression: &BinaryExpression,
+        binary_expression: &BinaryExpr,
         _expr: &Expression,
     ) {
         self.visit_expression(binary_expression.left);
@@ -232,7 +232,7 @@ impl Visitor for Printer<'_> {
 
     fn visit_parenthesized_expression(
         &mut self,
-        parenthesized_expression: &ParenthesizedExpression,
+        parenthesized_expression: &ParenthesizedExpr,
         _expr: &Expression,
     ) {
         self.result
@@ -244,7 +244,7 @@ impl Visitor for Printer<'_> {
 
     fn visit_variable_expression(
         &mut self,
-        variable_expression: &VariableExpression,
+        variable_expression: &VariableExpr,
         _expr: &Expression,
     ) {
         self.result.push_str(&format!(

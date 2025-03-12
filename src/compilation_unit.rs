@@ -1,5 +1,4 @@
 use std::cell::RefCell;
-use std::collections::HashMap;
 use std::rc::Rc;
 
 use terebinth::{Idx, IdxVec, idx};
@@ -8,11 +7,11 @@ use crate::ast::evaluator::AstEvaluator;
 use crate::ast::lexer::{Lexer, Token};
 use crate::ast::parser::Parser;
 use crate::ast::{
-    BinaryOperatorKind, BooleanExpression, CallExpression, Expression, FuncDeclStatement,
-    IfStatement, LetStatement, NumberExpression, ParenthesizedExpression, ReturnStatement, StmtId,
-    UnaryExpression, UnaryOperatorKind, VariableExpression, WhileStatement,
+    BinaryOperatorKind, BooleanExpr, CallExpr, Expression, FunctionDeclaration, IfStmt, LetStmt,
+    NumberExpr, ParenthesizedExpr, ReturnStmt, StmtId, UnaryExpr, UnaryOperatorKind, VariableExpr,
+    WhileStmt,
 };
-use crate::ast::{BlockStatement, visitor::Visitor};
+use crate::ast::{BlockStmt, visitor::Visitor};
 use crate::source::span::TextSpan;
 use crate::typings::Type;
 use crate::{ast, diagnostics, source};
@@ -23,7 +22,7 @@ idx!(VariableIndex);
 
 #[derive(Debug, Clone)]
 pub struct FunctionSymbol {
-    pub parameters: Vec<VariableSymbol>,
+    pub parameters: Vec<VariableIndex>,
     pub body: StmtId,
     pub return_type: Type,
     pub name: String,
@@ -36,7 +35,7 @@ pub struct VariableSymbol {
 }
 
 pub struct GlobalScope {
-    variables: IdxVec<VariableIndex, VariableSymbol>,
+    pub variables: IdxVec<VariableIndex, VariableSymbol>,
     pub functions: IdxVec<FunctionIndex, FunctionSymbol>,
 }
 
@@ -66,7 +65,7 @@ impl GlobalScope {
         &mut self,
         identifier: &str,
         function_body: StmtId,
-        parameters: Vec<VariableSymbol>,
+        parameters: Vec<VariableIndex>,
         return_type: Type,
     ) -> Result<(), ()> {
         if self.lookup_function(identifier).is_some() {
@@ -83,42 +82,32 @@ impl GlobalScope {
         Ok(())
     }
 
-    pub fn lookup_function(&self, identifier: &str) -> Option<&FunctionSymbol> {
+    pub fn lookup_function(&self, identifier: &str) -> Option<FunctionIndex> {
         self.functions
-            .iter()
-            .find(|function| function.name == identifier)
+            .indexed_iter()
+            .find(|(_, function)| function.name == identifier)
+            .map(|(idx, _)| idx)
     }
 }
 
 struct LocalScope {
-    variables: HashMap<String, VariableSymbol>,
-    function: Option<FunctionSymbol>,
+    locals: Vec<VariableIndex>,
 }
 
 impl LocalScope {
-    fn new(function: Option<FunctionSymbol>) -> Self {
-        LocalScope {
-            variables: HashMap::new(),
-            function,
-        }
+    fn new() -> Self {
+        LocalScope { locals: Vec::new() }
     }
 
-    fn declare_variable(&mut self, identifier: &str, var_type: Type) {
-        let variable = VariableSymbol {
-            name: identifier.to_string(),
-            var_type,
-        };
-        self.variables.insert(identifier.to_string(), variable);
-    }
-
-    fn lookup_variable(&self, identifier: &str) -> Option<&VariableSymbol> {
-        self.variables.get(identifier)
+    fn add_local(&mut self, local: VariableIndex) {
+        self.locals.push(local);
     }
 }
 
 struct Scopes {
     local_scopes: Vec<LocalScope>,
     global_scope: GlobalScope,
+    surrounding_function: Option<FunctionIndex>,
 }
 
 #[allow(dead_code)]
@@ -127,6 +116,7 @@ impl Scopes {
         Scopes {
             local_scopes: Vec::new(),
             global_scope: GlobalScope::new(),
+            surrounding_function: None,
         }
     }
 
@@ -134,11 +124,22 @@ impl Scopes {
         Scopes {
             local_scopes: Vec::new(),
             global_scope,
+            surrounding_function: None,
         }
     }
 
-    fn enter_scope(&mut self, function: Option<FunctionSymbol>) {
-        self.local_scopes.push(LocalScope::new(function));
+    fn enter_function_scope(&mut self, function_idx: FunctionIndex) {
+        self.surrounding_function = Some(function_idx);
+        self.enter_scope();
+    }
+
+    fn enter_scope(&mut self) {
+        self.local_scopes.push(LocalScope::new());
+    }
+
+    fn exit_function_scope(&mut self) {
+        self.surrounding_function = None;
+        self.exit_scope();
     }
 
     fn exit_scope(&mut self) {
@@ -146,26 +147,27 @@ impl Scopes {
     }
 
     fn declare_variable(&mut self, identifier: &str, var_type: Type) {
+        let idx = self.global_scope.declare_variable(identifier, var_type);
         if self.is_inside_local_scope() {
-            self.local_scopes
-                .last_mut()
-                .unwrap()
-                .declare_variable(identifier, var_type);
-        } else {
-            self.global_scope.declare_variable(identifier, var_type);
+            self.current_local_scope_mut().add_local(idx);
         }
     }
 
     fn lookup_variable(&self, identifier: &str) -> Option<&VariableSymbol> {
         for scope in self.local_scopes.iter().rev() {
-            if let Some(variable) = scope.lookup_variable(identifier) {
+            if let Some(variable) = scope
+                .locals
+                .iter()
+                .map(|idx| self.global_scope.variables.get(*idx))
+                .find(|variable| variable.name == identifier)
+            {
                 return Some(variable);
             }
         }
         self.global_scope.lookup_variable(identifier)
     }
 
-    fn lookup_function(&self, identifier: &str) -> Option<&FunctionSymbol> {
+    fn lookup_function(&self, identifier: &str) -> Option<FunctionIndex> {
         self.global_scope.lookup_function(identifier)
     }
 
@@ -174,12 +176,12 @@ impl Scopes {
     }
 
     fn surrounding_function(&self) -> Option<&FunctionSymbol> {
-        for scope in self.local_scopes.iter().rev() {
-            if let Some(function) = &scope.function {
-                return Some(function);
-            }
-        }
-        None
+        self.surrounding_function
+            .map(|idx| self.global_scope.functions.get(idx))
+    }
+
+    fn current_local_scope_mut(&mut self) -> &mut LocalScope {
+        self.local_scopes.last_mut().unwrap()
     }
 }
 
@@ -296,16 +298,18 @@ impl Visitor for GlobalSymbolResolver<'_> {
         self.ast
     }
 
-    fn visit_func_decl_statement(&mut self, func_decl_statement: &FuncDeclStatement) {
+    fn visit_func_decl_statement(&mut self, func_decl_statement: &FunctionDeclaration) {
         let parameters = func_decl_statement
             .parameters
             .iter()
-            .map(|parameter| VariableSymbol {
-                var_type: resolve_type_from_string(
-                    &self.diagnostics,
-                    &parameter.type_annotation.type_name,
-                ),
-                name: parameter.identifier.span.literal.clone(),
+            .map(|parameter| {
+                self.global_scope.declare_variable(
+                    &parameter.identifier.span.literal,
+                    resolve_type_from_string(
+                        &self.diagnostics,
+                        &parameter.type_annotation.type_name,
+                    ),
+                )
             })
             .collect();
         let literal_span = &func_decl_statement.identifier.span;
@@ -330,22 +334,22 @@ impl Visitor for GlobalSymbolResolver<'_> {
         }
     }
 
-    fn visit_let_statement(&mut self, _let_statement: &ast::LetStatement) {}
+    fn visit_let_statement(&mut self, _let_statement: &ast::LetStmt) {}
 
     fn visit_variable_expression(
         &mut self,
-        _variable_expression: &VariableExpression,
+        _variable_expression: &VariableExpr,
         _expr: &Expression,
     ) {
     }
 
-    fn visit_number_expression(&mut self, _number: &NumberExpression, _expr: &Expression) {}
+    fn visit_number_expression(&mut self, _number: &NumberExpr, _expr: &Expression) {}
 
-    fn visit_boolean_expression(&mut self, _boolean: &BooleanExpression, _expr: &Expression) {}
+    fn visit_boolean_expression(&mut self, _boolean: &BooleanExpr, _expr: &Expression) {}
 
     fn visit_error(&mut self, _span: &TextSpan) {}
 
-    fn visit_unary_expression(&mut self, _unary_expression: &UnaryExpression, _expr: &Expression) {}
+    fn visit_unary_expression(&mut self, _unary_expression: &UnaryExpr, _expr: &Expression) {}
 }
 
 impl Visitor for Resolver<'_> {
@@ -353,22 +357,22 @@ impl Visitor for Resolver<'_> {
         self.ast
     }
 
-    fn visit_func_decl_statement(&mut self, func_decl_statement: &FuncDeclStatement) {
-        let function_symbol = self
+    fn visit_func_decl_statement(&mut self, func_decl_statement: &FunctionDeclaration) {
+        let function_id = self
             .scopes
             .lookup_function(&func_decl_statement.identifier.span.literal)
             .unwrap()
             .clone();
-        self.scopes.enter_scope(Some(function_symbol.clone()));
-        for parameter in &function_symbol.parameters {
-            self.scopes
-                .declare_variable(&parameter.name, parameter.var_type);
+        self.scopes.enter_function_scope(function_id);
+        let function = self.scopes.global_scope.functions.get(function_id);
+        for parameter in function.parameters.clone() {
+            self.scopes.current_local_scope_mut().locals.push(parameter);
         }
         self.visit_statement(func_decl_statement.body);
-        self.scopes.exit_scope();
+        self.scopes.exit_function_scope();
     }
 
-    fn visit_return_statement(&mut self, return_statement: &ReturnStatement) {
+    fn visit_return_statement(&mut self, return_statement: &ReturnStmt) {
         let return_keyword = return_statement.return_keyword.clone();
         match self.scopes.surrounding_function().cloned() {
             None => {
@@ -392,23 +396,23 @@ impl Visitor for Resolver<'_> {
         }
     }
 
-    fn visit_while_statement(&mut self, while_statement: &WhileStatement) {
+    fn visit_while_statement(&mut self, while_statement: &WhileStmt) {
         self.visit_expression(while_statement.condition);
         let condition = self.ast.query_expr(while_statement.condition);
         self.expect_type(Type::Bool, condition.expr_type, &condition.span(self.ast));
         self.visit_statement(while_statement.body);
     }
 
-    fn visit_block_statement(&mut self, block_statement: &BlockStatement) {
-        self.scopes.enter_scope(None);
+    fn visit_block_statement(&mut self, block_statement: &BlockStmt) {
+        self.scopes.enter_scope();
         for statement in &block_statement.statements {
             self.visit_statement(*statement);
         }
         self.scopes.exit_scope();
     }
 
-    fn visit_if_statement(&mut self, if_statement: &IfStatement) {
-        self.scopes.enter_scope(None);
+    fn visit_if_statement(&mut self, if_statement: &IfStmt) {
+        self.scopes.enter_scope();
         self.visit_expression(if_statement.condition);
         let condition_expression = self.ast.query_expr(if_statement.condition);
         self.expect_type(
@@ -419,13 +423,13 @@ impl Visitor for Resolver<'_> {
         self.visit_statement(if_statement.then_branch);
         self.scopes.exit_scope();
         if let Some(else_branch) = &if_statement.else_branch {
-            self.scopes.enter_scope(None);
+            self.scopes.enter_scope();
             self.visit_statement(else_branch.else_statement);
             self.scopes.exit_scope();
         }
     }
 
-    fn visit_let_statement(&mut self, let_statement: &LetStatement) {
+    fn visit_let_statement(&mut self, let_statement: &LetStmt) {
         let identifier = let_statement.identifier.span.literal.clone();
         self.visit_expression(let_statement.initializer);
         let initializer_expression = self.ast.query_expr(let_statement.initializer);
@@ -444,11 +448,7 @@ impl Visitor for Resolver<'_> {
         self.scopes.declare_variable(&identifier, initializer_type);
     }
 
-    fn visit_variable_expression(
-        &mut self,
-        variable_expression: &VariableExpression,
-        expr: &Expression,
-    ) {
+    fn visit_variable_expression(&mut self, variable_expression: &VariableExpr, expr: &Expression) {
         match self
             .scopes
             .lookup_variable(&variable_expression.identifier.span.literal)
@@ -463,24 +463,20 @@ impl Visitor for Resolver<'_> {
         }
     }
 
-    fn visit_number_expression(&mut self, _number: &NumberExpression, expr: &Expression) {
+    fn visit_number_expression(&mut self, _number: &NumberExpr, expr: &Expression) {
         self.ast.set_type(expr.id, Type::Int);
     }
 
     fn visit_error(&mut self, _span: &TextSpan) {}
 
-    fn visit_unary_expression(&mut self, unary_expression: &UnaryExpression, expr: &Expression) {
+    fn visit_unary_expression(&mut self, unary_expression: &UnaryExpr, expr: &Expression) {
         self.visit_expression(unary_expression.operand);
         let operand = self.ast.query_expr(unary_expression.operand);
         let ty = self.resolve_unary_expression(operand, &unary_expression.operator.kind);
         self.ast.set_type(expr.id, ty);
     }
 
-    fn visit_binary_expression(
-        &mut self,
-        binary_expression: &ast::BinaryExpression,
-        expr: &Expression,
-    ) {
+    fn visit_binary_expression(&mut self, binary_expression: &ast::BinaryExpr, expr: &Expression) {
         self.visit_expression(binary_expression.left);
         self.visit_expression(binary_expression.right);
         let left = self.ast.query_expr(binary_expression.left);
@@ -492,7 +488,7 @@ impl Visitor for Resolver<'_> {
 
     fn visit_parenthesized_expression(
         &mut self,
-        parenthesized_expression: &ParenthesizedExpression,
+        parenthesized_expression: &ParenthesizedExpr,
         expr: &Expression,
     ) {
         self.visit_expression(parenthesized_expression.expression);
@@ -502,13 +498,13 @@ impl Visitor for Resolver<'_> {
         self.ast.set_type(expr.id, expression.expr_type);
     }
 
-    fn visit_boolean_expression(&mut self, _boolean: &BooleanExpression, _expr: &Expression) {}
+    fn visit_boolean_expression(&mut self, _boolean: &BooleanExpr, _expr: &Expression) {}
 
-    fn visit_call_expression(&mut self, call_expression: &CallExpression, expr: &Expression) {
+    fn visit_call_expression(&mut self, call_expression: &CallExpr, expr: &Expression) {
         let function = self
             .scopes
             .lookup_function(&call_expression.identifier.span.literal)
-            .cloned();
+            .map(|function| function.clone());
         let ty = match function {
             None => {
                 let mut diagnostics_binding = self.diagnostics.borrow_mut();
@@ -516,6 +512,7 @@ impl Visitor for Resolver<'_> {
                 Type::Void
             }
             Some(function) => {
+                let function = self.scopes.global_scope.functions.get(function);
                 if function.parameters.len() != call_expression.arguments.len() {
                     let mut diagnostics_binding = self.diagnostics.borrow_mut();
                     diagnostics_binding.report_invalid_argument_count(
@@ -528,10 +525,11 @@ impl Visitor for Resolver<'_> {
                 for (argument, param) in call_expression
                     .arguments
                     .iter()
-                    .zip(function.parameters.iter())
+                    .zip(function.parameters.clone().iter())
                 {
                     self.visit_expression(*argument);
                     let argument_expression = self.ast.query_expr(*argument);
+                    let param = self.scopes.global_scope.variables.get(*param);
                     self.expect_type(
                         param.var_type,
                         argument_expression.expr_type,
@@ -591,6 +589,7 @@ impl CompilationUnit {
         let mut eval = AstEvaluator::new(&self.global_scope, &self.ast);
         let main_function = self.global_scope.lookup_function("main");
         if let Some(function) = main_function {
+            let function = self.global_scope.functions.get(function);
             eval.visit_statement(function.body);
         } else {
             self.ast.visit(&mut eval);
