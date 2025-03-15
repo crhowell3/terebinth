@@ -1,153 +1,175 @@
 use crate::ast::{
-    AssignmentExpr, Ast, BinaryExpr, BlockStmt, BooleanExpr, ExpressionKind, IfStmt, LetStmt,
-    NumberExpr, ParenthesizedExpr, StatementKind, UnaryExpr, VariableExpr,
+    AssignmentExpr, Ast, BinaryExpr, BlockExpr, BooleanExpr, ExprKind, IfExpr, LetStmt, NumberExpr,
+    ParenthesizedExpr, StmtKind, UnaryExpr, VariableExpr,
 };
 use crate::source::span::TextSpan;
 
 use super::{
-    CallExpr, ExprId, Expression, FunctionDeclaration, ReturnStmt, StmtId, WhileStmt,
+    CallExpr, Expr, ExprId, FunctionDeclaration, ItemId, ItemKind, ReturnStmt, Stmt, StmtId,
+    WhileStmt,
 };
 
 pub trait Visitor {
-    fn get_ast(&self) -> &Ast;
+    fn visit_item(&mut self, ast: &mut Ast, item: ItemId) {
+        self.visit_item_default(ast, item);
+    }
 
-    fn do_visit_statement(&mut self, statement: StmtId) {
-        let statement = self.get_ast().query_stmt(statement).clone();
+    fn visit_item_default(&mut self, ast: &mut Ast, item: ItemId) {
+        let item = ast.query_item(item).clone();
+        match &item.kind {
+            ItemKind::Func(func_decl) => {
+                self.visit_func_decl_statement(ast, func_decl);
+            }
+            ItemKind::Stmt(stmt) => {
+                self.visit_stmt(ast, *stmt);
+            }
+        }
+    }
+
+    fn do_visit_statement(&mut self, ast: &mut Ast, statement: StmtId) {
+        let statement = ast.query_stmt(statement).clone();
         match &statement.kind {
-            StatementKind::Expression(expr) => {
-                self.visit_expression(*expr);
+            StmtKind::Expr(expr) => {
+                self.visit_expr(ast, *expr);
             }
-            StatementKind::Let(expr) => {
-                self.visit_let_statement(expr);
+            StmtKind::Let(expr) => {
+                self.visit_let_statement(ast, expr, &statement);
             }
-            StatementKind::If(stmt) => {
-                self.visit_if_statement(stmt);
+            StmtKind::While(stmt) => {
+                self.visit_while_statement(ast, &stmt);
             }
-            StatementKind::Block(stmt) => {
-                self.visit_block_statement(stmt);
-            }
-            StatementKind::While(stmt) => {
-                self.visit_while_statement(stmt);
-            }
-            StatementKind::FuncDecl(stmt) => {
-                self.visit_func_decl_statement(stmt);
-            }
-            StatementKind::Return(stmt) => {
-                self.visit_return_statement(stmt);
+            StmtKind::Return(stmt) => {
+                self.visit_return_statement(ast, &stmt);
             }
         }
     }
 
-    fn visit_while_statement(&mut self, while_statement: &WhileStmt) {
-        self.visit_expression(while_statement.condition);
-        self.visit_statement(while_statement.body);
-    }
+    fn visit_func_decl_statement(
+        &mut self,
+        ast: &mut Ast,
+        func_decl_statement: &FunctionDeclaration,
+    );
 
-    fn visit_func_decl_statement(&mut self, func_decl_statement: &FunctionDeclaration) {
-        self.visit_statement(func_decl_statement.body);
-    }
-
-    fn visit_return_statement(&mut self, return_statement: &ReturnStmt) {
+    fn visit_return_statement(&mut self, ast: &mut Ast, return_statement: &ReturnStmt) {
         if let Some(expr) = &return_statement.return_value {
-            self.visit_expression(*expr);
+            self.visit_expr(ast, *expr);
         }
     }
 
-    fn visit_block_statement(&mut self, block_statement: &BlockStmt) {
-        for statement in &block_statement.statements {
-            self.visit_statement(*statement);
+    fn visit_while_statement(&mut self, ast: &mut Ast, while_statement: &WhileStmt) {
+        self.visit_expr(ast, while_statement.condition);
+        self.visit_expr(ast, while_statement.body);
+    }
+
+    fn visit_block_expr(&mut self, ast: &mut Ast, block_expr: &BlockExpr, expr: &Expr) {
+        for stmt in &block_expr.stmts {
+            self.visit_stmt(ast, *stmt);
         }
     }
 
-    fn visit_if_statement(&mut self, if_statement: &IfStmt) {
-        self.visit_expression(if_statement.condition);
-        self.visit_statement(if_statement.then_branch);
-        if let Some(else_branch) = &if_statement.else_branch {
-            self.visit_statement(else_branch.else_statement);
+    fn visit_if_expr(&mut self, ast: &mut Ast, if_expr: &IfExpr, expr: &Expr) {
+        self.visit_expr(ast, if_expr.condition);
+        self.visit_expr(ast, if_expr.then_branch);
+        if let Some(else_branch) = &if_expr.else_branch {
+            self.visit_expr(ast, else_branch.expr);
         }
     }
 
-    fn visit_let_statement(&mut self, let_statement: &LetStmt);
+    fn visit_let_statement(&mut self, ast: &mut Ast, let_statement: &LetStmt, stmt: &Stmt);
 
-    fn visit_statement(&mut self, statement: StmtId) {
-        self.do_visit_statement(statement);
+    fn visit_stmt(&mut self, ast: &mut Ast, statement: StmtId) {
+        self.do_visit_statement(ast, statement);
     }
 
-    fn do_visit_expression(&mut self, expression: ExprId) {
-        let expression = self.get_ast().query_expr(expression).clone();
+    fn do_visit_expression(&mut self, ast: &mut Ast, expression: ExprId) {
+        let expression = ast.query_expr(expression).clone();
         match &expression.kind {
-            ExpressionKind::Number(number) => {
-                self.visit_number_expression(number, &expression);
+            ExprKind::Number(number) => {
+                self.visit_number_expression(ast, number, &expression);
             }
-            ExpressionKind::Binary(expr) => {
-                self.visit_binary_expression(expr, &expression);
+            ExprKind::Binary(expr) => {
+                self.visit_binary_expression(ast, expr, &expression);
             }
-            ExpressionKind::Parenthesized(expr) => {
-                self.visit_parenthesized_expression(expr, &expression);
+            ExprKind::Parenthesized(expr) => {
+                self.visit_parenthesized_expression(ast, expr, &expression);
             }
-            ExpressionKind::Error(span) => {
-                self.visit_error(span);
+            ExprKind::Error(span) => {
+                self.visit_error(ast, span);
             }
-            ExpressionKind::Variable(expr) => {
-                self.visit_variable_expression(expr, &expression);
+            ExprKind::Variable(expr) => {
+                self.visit_variable_expression(ast, expr, &expression);
             }
-            ExpressionKind::Unary(expr) => {
-                self.visit_unary_expression(expr, &expression);
+            ExprKind::Unary(expr) => {
+                self.visit_unary_expression(ast, expr, &expression);
             }
-            ExpressionKind::Assignment(expr) => {
-                self.visit_assignment_expression(expr, &expression);
+            ExprKind::Assignment(expr) => {
+                self.visit_assignment_expression(ast, expr, &expression);
             }
-            ExpressionKind::Boolean(expr) => {
-                self.visit_boolean_expression(expr, &expression);
+            ExprKind::Boolean(expr) => {
+                self.visit_boolean_expression(ast, expr, &expression);
             }
-            ExpressionKind::Call(expr) => {
-                self.visit_call_expression(expr, &expression);
+            ExprKind::Call(expr) => {
+                self.visit_call_expression(ast, expr, &expression);
+            }
+            ExprKind::If(expr) => {
+                self.visit_if_expr(ast, expr, &expression);
+            }
+            ExprKind::Block(expr) => {
+                self.visit_block_expr(ast, &expr, &expression);
             }
         }
     }
 
-    fn visit_expression(&mut self, expression: ExprId) {
-        self.do_visit_expression(expression);
+    fn visit_expr(&mut self, ast: &mut Ast, expression: ExprId) {
+        self.do_visit_expression(ast, expression);
     }
 
-    fn visit_call_expression(&mut self, call_expression: &CallExpr, _expr: &Expression) {
+    fn visit_call_expression(&mut self, ast: &mut Ast, call_expression: &CallExpr, _expr: &Expr) {
         for argument in &call_expression.arguments {
-            self.visit_expression(*argument);
+            self.visit_expr(ast, *argument);
         }
     }
 
     fn visit_assignment_expression(
         &mut self,
+        ast: &mut Ast,
         assignment_expression: &AssignmentExpr,
-        _expr: &Expression,
+        _expr: &Expr,
     ) {
-        self.visit_expression(assignment_expression.expression);
+        self.visit_expr(ast, assignment_expression.expression);
     }
 
-    fn visit_boolean_expression(&mut self, boolean: &BooleanExpr, _expr: &Expression);
+    fn visit_boolean_expression(&mut self, ast: &mut Ast, boolean: &BooleanExpr, _expr: &Expr);
 
     fn visit_variable_expression(
         &mut self,
+        ast: &mut Ast,
         variable_expression: &VariableExpr,
-        _expr: &Expression,
+        _expr: &Expr,
     );
 
-    fn visit_number_expression(&mut self, number: &NumberExpr, _expr: &Expression);
+    fn visit_number_expression(&mut self, ast: &mut Ast, number: &NumberExpr, _expr: &Expr);
 
-    fn visit_error(&mut self, span: &TextSpan);
+    fn visit_error(&mut self, ast: &mut Ast, span: &TextSpan);
 
-    fn visit_unary_expression(&mut self, unary_expression: &UnaryExpr, _expr: &Expression);
+    fn visit_unary_expression(&mut self, ast: &mut Ast, unary_expression: &UnaryExpr, _expr: &Expr);
 
-    fn visit_binary_expression(&mut self, binary_expression: &BinaryExpr, _expr: &Expression) {
-        self.visit_expression(binary_expression.left);
-        self.visit_expression(binary_expression.right);
+    fn visit_binary_expression(
+        &mut self,
+        ast: &mut Ast,
+        binary_expression: &BinaryExpr,
+        _expr: &Expr,
+    ) {
+        self.visit_expr(ast, binary_expression.left);
+        self.visit_expr(ast, binary_expression.right);
     }
 
     fn visit_parenthesized_expression(
         &mut self,
+        ast: &mut Ast,
         parenthesized_expression: &ParenthesizedExpr,
-        _expr: &Expression,
+        _expr: &Expr,
     ) {
-        self.visit_expression(parenthesized_expression.expression);
+        self.visit_expr(ast, parenthesized_expression.expression);
     }
 }
