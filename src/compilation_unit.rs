@@ -316,11 +316,7 @@ impl GlobalSymbolResolver {
 }
 
 impl Visitor for GlobalSymbolResolver {
-    fn visit_func_decl_statement(
-        &mut self,
-        _ast: &mut Ast,
-        func_decl_statement: &FunctionDeclaration,
-    ) {
+    fn visit_func_decl_stmt(&mut self, _ast: &mut Ast, func_decl_statement: &FunctionDeclaration) {
         let parameters = func_decl_statement
             .parameters
             .iter()
@@ -357,10 +353,9 @@ impl Visitor for GlobalSymbolResolver {
         }
     }
 
-    fn visit_let_statement(&mut self, _ast: &mut Ast, _let_statement: &ast::LetStmt, _stmt: &Stmt) {
-    }
+    fn visit_let_stmt(&mut self, _ast: &mut Ast, _let_statement: &ast::LetStmt, _stmt: &Stmt) {}
 
-    fn visit_variable_expression(
+    fn visit_variable_expr(
         &mut self,
         _ast: &mut Ast,
         _variable_expression: &VariableExpr,
@@ -368,27 +363,17 @@ impl Visitor for GlobalSymbolResolver {
     ) {
     }
 
-    fn visit_number_expression(&mut self, _ast: &mut Ast, _number: &NumberExpr, _expr: &Expr) {}
+    fn visit_number_expr(&mut self, _ast: &mut Ast, _number: &NumberExpr, _expr: &Expr) {}
 
-    fn visit_boolean_expression(&mut self, _ast: &mut Ast, _boolean: &BooleanExpr, _expr: &Expr) {}
+    fn visit_boolean_expr(&mut self, _ast: &mut Ast, _boolean: &BooleanExpr, _expr: &Expr) {}
 
     fn visit_error(&mut self, _ast: &mut Ast, _span: &TextSpan) {}
 
-    fn visit_unary_expression(
-        &mut self,
-        _ast: &mut Ast,
-        _unary_expression: &UnaryExpr,
-        _expr: &Expr,
-    ) {
-    }
+    fn visit_unary_expr(&mut self, _ast: &mut Ast, _unary_expression: &UnaryExpr, _expr: &Expr) {}
 }
 
 impl Visitor for Resolver {
-    fn visit_func_decl_statement(
-        &mut self,
-        ast: &mut Ast,
-        func_decl_statement: &FunctionDeclaration,
-    ) {
+    fn visit_func_decl_stmt(&mut self, ast: &mut Ast, func_decl_statement: &FunctionDeclaration) {
         let function_id = self
             .scopes
             .lookup_function(&func_decl_statement.identifier.span.literal)
@@ -402,7 +387,7 @@ impl Visitor for Resolver {
         self.scopes.exit_function_scope();
     }
 
-    fn visit_return_statement(&mut self, ast: &mut Ast, return_statement: &ReturnStmt) {
+    fn visit_return_stmt(&mut self, ast: &mut Ast, return_statement: &ReturnStmt) {
         let return_keyword = return_statement.return_keyword.clone();
         match self.scopes.surrounding_function().cloned() {
             None => {
@@ -426,7 +411,7 @@ impl Visitor for Resolver {
         }
     }
 
-    fn visit_while_statement(&mut self, ast: &mut Ast, while_statement: &WhileStmt) {
+    fn visit_while_stmt(&mut self, ast: &mut Ast, while_statement: &WhileStmt) {
         self.visit_expr(ast, while_statement.condition);
         let condition = ast.query_expr(while_statement.condition);
         self.expect_type(Type::Bool, condition.ty, &condition.span(ast));
@@ -475,7 +460,7 @@ impl Visitor for Resolver {
         ast.set_type(expr.id, ty);
     }
 
-    fn visit_let_statement(&mut self, ast: &mut Ast, let_statement: &LetStmt, stmt: &Stmt) {
+    fn visit_let_stmt(&mut self, ast: &mut Ast, let_statement: &LetStmt, stmt: &Stmt) {
         let identifier = let_statement.identifier.span.literal.clone();
         self.visit_expr(ast, let_statement.initializer);
         let initializer_expression = ast.query_expr(let_statement.initializer);
@@ -495,7 +480,7 @@ impl Visitor for Resolver {
         ast.set_variable_for_stmt(stmt.id, variable);
     }
 
-    fn visit_variable_expression(
+    fn visit_variable_expr(
         &mut self,
         ast: &mut Ast,
         variable_expression: &VariableExpr,
@@ -517,20 +502,20 @@ impl Visitor for Resolver {
         }
     }
 
-    fn visit_number_expression(&mut self, ast: &mut Ast, _number: &NumberExpr, expr: &Expr) {
+    fn visit_number_expr(&mut self, ast: &mut Ast, _number: &NumberExpr, expr: &Expr) {
         ast.set_type(expr.id, Type::Int);
     }
 
     fn visit_error(&mut self, _ast: &mut Ast, _span: &TextSpan) {}
 
-    fn visit_unary_expression(&mut self, ast: &mut Ast, unary_expression: &UnaryExpr, expr: &Expr) {
+    fn visit_unary_expr(&mut self, ast: &mut Ast, unary_expression: &UnaryExpr, expr: &Expr) {
         self.visit_expr(ast, unary_expression.operand);
         let operand = ast.query_expr(unary_expression.operand);
         let ty = self.resolve_unary_expression(ast, operand, &unary_expression.operator.kind);
         ast.set_type(expr.id, ty);
     }
 
-    fn visit_binary_expression(
+    fn visit_binary_expr(
         &mut self,
         ast: &mut Ast,
         binary_expression: &ast::BinaryExpr,
@@ -545,7 +530,7 @@ impl Visitor for Resolver {
         ast.set_type(expr.id, ty);
     }
 
-    fn visit_parenthesized_expression(
+    fn visit_parenthesized_expr(
         &mut self,
         ast: &mut Ast,
         parenthesized_expression: &ParenthesizedExpr,
@@ -558,11 +543,11 @@ impl Visitor for Resolver {
         ast.set_type(expr.id, expression.ty);
     }
 
-    fn visit_boolean_expression(&mut self, ast: &mut Ast, _boolean: &BooleanExpr, expr: &Expr) {
+    fn visit_boolean_expr(&mut self, ast: &mut Ast, _boolean: &BooleanExpr, expr: &Expr) {
         ast.set_type(expr.id, Type::Bool);
     }
 
-    fn visit_call_expression(&mut self, ast: &mut Ast, call_expression: &CallExpr, expr: &Expr) {
+    fn visit_call_expr(&mut self, ast: &mut Ast, call_expression: &CallExpr, expr: &Expr) {
         let function = self
             .scopes
             .lookup_function(&call_expression.identifier.span.literal);
@@ -603,7 +588,7 @@ impl Visitor for Resolver {
         ast.set_type(expr.id, ty);
     }
 
-    fn visit_assignment_expression(
+    fn visit_assignment_expr(
         &mut self,
         ast: &mut Ast,
         assignment_expression: &ast::AssignmentExpr,

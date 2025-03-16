@@ -109,11 +109,7 @@ impl<'a> AstEvaluator<'a> {
 }
 
 impl Visitor for AstEvaluator<'_> {
-    fn visit_func_decl_statement(
-        &mut self,
-        _ast: &mut Ast,
-        _func_decl_statement: &FunctionDeclaration,
-    ) {
+    fn visit_func_decl_stmt(&mut self, _ast: &mut Ast, _func_decl_statement: &FunctionDeclaration) {
     }
 
     fn visit_if_expr(&mut self, ast: &mut Ast, if_statement: &IfExpr, _expr: &Expr) {
@@ -131,7 +127,7 @@ impl Visitor for AstEvaluator<'_> {
         self.pop_frame();
     }
 
-    fn visit_number_expression(&mut self, _ast: &mut Ast, number: &NumberExpr, _expr: &Expr) {
+    fn visit_number_expr(&mut self, _ast: &mut Ast, number: &NumberExpr, _expr: &Expr) {
         self.last_value = Some(number.number);
     }
 
@@ -139,12 +135,7 @@ impl Visitor for AstEvaluator<'_> {
         todo!()
     }
 
-    fn visit_unary_expression(
-        &mut self,
-        ast: &mut Ast,
-        unary_expression: &UnaryExpr,
-        _expr: &Expr,
-    ) {
+    fn visit_unary_expr(&mut self, ast: &mut Ast, unary_expression: &UnaryExpr, _expr: &Expr) {
         self.visit_expr(ast, unary_expression.operand);
         let operand = self.last_value.unwrap();
         self.last_value = Some(match unary_expression.operator.kind {
@@ -153,7 +144,7 @@ impl Visitor for AstEvaluator<'_> {
         });
     }
 
-    fn visit_binary_expression(&mut self, ast: &mut Ast, binary_expr: &BinaryExpr, _expr: &Expr) {
+    fn visit_binary_expr(&mut self, ast: &mut Ast, binary_expr: &BinaryExpr, _expr: &Expr) {
         self.visit_expr(ast, binary_expr.left);
         let left = self.last_value.unwrap();
         self.visit_expr(ast, binary_expr.right);
@@ -182,7 +173,7 @@ impl Visitor for AstEvaluator<'_> {
         });
     }
 
-    fn visit_while_statement(&mut self, ast: &mut Ast, while_statement: &WhileStmt) {
+    fn visit_while_stmt(&mut self, ast: &mut Ast, while_statement: &WhileStmt) {
         self.push_frame();
         self.visit_expr(ast, while_statement.condition);
         while self.last_value.unwrap() != 0 {
@@ -200,13 +191,13 @@ impl Visitor for AstEvaluator<'_> {
         self.pop_frame();
     }
 
-    fn visit_let_statement(&mut self, ast: &mut Ast, let_statement: &LetStmt, _stmt: &Stmt) {
+    fn visit_let_stmt(&mut self, ast: &mut Ast, let_statement: &LetStmt, _stmt: &Stmt) {
         self.visit_expr(ast, let_statement.initializer);
         self.frames
             .insert(let_statement.variable_idx, self.last_value.unwrap());
     }
 
-    fn visit_variable_expression(
+    fn visit_variable_expr(
         &mut self,
         _ast: &mut Ast,
         variable_expression: &VariableExpr,
@@ -221,7 +212,7 @@ impl Visitor for AstEvaluator<'_> {
         );
     }
 
-    fn visit_call_expression(&mut self, ast: &mut Ast, call_expression: &CallExpr, _expr: &Expr) {
+    fn visit_call_expr(&mut self, ast: &mut Ast, call_expression: &CallExpr, _expr: &Expr) {
         let function_idx = self
             .global_scope
             .lookup_function(&call_expression.identifier.span.literal)
@@ -241,7 +232,7 @@ impl Visitor for AstEvaluator<'_> {
         self.pop_frame();
     }
 
-    fn visit_parenthesized_expression(
+    fn visit_parenthesized_expr(
         &mut self,
         ast: &mut Ast,
         parenthesized_expression: &ParenthesizedExpr,
@@ -250,7 +241,7 @@ impl Visitor for AstEvaluator<'_> {
         self.visit_expr(ast, parenthesized_expression.expression);
     }
 
-    fn visit_assignment_expression(
+    fn visit_assignment_expr(
         &mut self,
         ast: &mut Ast,
         assignment_expression: &AssignmentExpr,
@@ -261,7 +252,7 @@ impl Visitor for AstEvaluator<'_> {
             .update(assignment_expression.variable_idx, self.last_value.unwrap());
     }
 
-    fn visit_boolean_expression(&mut self, _ast: &mut Ast, boolean: &BooleanExpr, _expr: &Expr) {
+    fn visit_boolean_expr(&mut self, _ast: &mut Ast, boolean: &BooleanExpr, _expr: &Expr) {
         self.last_value = Some(i64::from(boolean.value));
     }
 }

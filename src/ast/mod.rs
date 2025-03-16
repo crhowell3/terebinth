@@ -749,7 +749,7 @@ mod test {
     }
 
     impl Visitor for Verifier {
-        fn visit_func_decl_statement(
+        fn visit_func_decl_stmt(
             &mut self,
             ast: &mut Ast,
             func_decl_statement: &super::FunctionDeclaration,
@@ -758,19 +758,19 @@ mod test {
             self.visit_stmt(ast, func_decl_statement.body);
         }
 
-        fn visit_return_statement(&mut self, ast: &mut Ast, return_statement: &ReturnStmt) {
+        fn visit_return_stmt(&mut self, ast: &mut Ast, return_statement: &ReturnStmt) {
             self.actual.push(TestAstNode::Return);
             if let Some(expr) = &return_statement.return_value {
                 self.visit_expr(ast, *expr);
             }
         }
 
-        fn visit_let_statement(&mut self, ast: &mut Ast, let_statement: &LetStmt, _stmt: &Stmt) {
+        fn visit_let_stmt(&mut self, ast: &mut Ast, let_statement: &LetStmt, _stmt: &Stmt) {
             self.actual.push(TestAstNode::Let);
             self.visit_expr(ast, let_statement.initializer);
         }
 
-        fn visit_variable_expression(
+        fn visit_variable_expr(
             &mut self,
             _ast: &mut Ast,
             variable_expression: &super::VariableExpr,
@@ -781,7 +781,7 @@ mod test {
             ));
         }
 
-        fn visit_assignment_expression(
+        fn visit_assignment_expr(
             &mut self,
             ast: &mut Ast,
             assignment_expression: &AssignmentExpr,
@@ -791,12 +791,7 @@ mod test {
             self.visit_expr(ast, assignment_expression.expression);
         }
 
-        fn visit_number_expression(
-            &mut self,
-            _ast: &mut Ast,
-            number: &super::NumberExpr,
-            _expr: &Expr,
-        ) {
+        fn visit_number_expr(&mut self, _ast: &mut Ast, number: &super::NumberExpr, _expr: &Expr) {
             self.actual.push(TestAstNode::Number(number.number));
         }
 
@@ -804,17 +799,12 @@ mod test {
             // TODO
         }
 
-        fn visit_unary_expression(
-            &mut self,
-            ast: &mut Ast,
-            unary_expression: &UnaryExpr,
-            _expr: &Expr,
-        ) {
+        fn visit_unary_expr(&mut self, ast: &mut Ast, unary_expression: &UnaryExpr, _expr: &Expr) {
             self.actual.push(TestAstNode::Unary);
             self.visit_expr(ast, unary_expression.operand);
         }
 
-        fn visit_parenthesized_expression(
+        fn visit_parenthesized_expr(
             &mut self,
             ast: &mut Ast,
             parenthesized_expression: &super::ParenthesizedExpr,
@@ -824,7 +814,7 @@ mod test {
             self.visit_expr(ast, parenthesized_expression.expression);
         }
 
-        fn visit_binary_expression(
+        fn visit_binary_expr(
             &mut self,
             ast: &mut Ast,
             binary_expression: &BinaryExpr,
@@ -835,12 +825,7 @@ mod test {
             self.visit_expr(ast, binary_expression.right);
         }
 
-        fn visit_boolean_expression(
-            &mut self,
-            _ast: &mut Ast,
-            boolean: &BooleanExpr,
-            _expr: &Expr,
-        ) {
+        fn visit_boolean_expr(&mut self, _ast: &mut Ast, boolean: &BooleanExpr, _expr: &Expr) {
             self.actual.push(TestAstNode::Boolean(boolean.value));
         }
 
@@ -855,7 +840,7 @@ mod test {
             }
         }
 
-        fn visit_while_statement(&mut self, ast: &mut Ast, while_statement: &WhileStmt) {
+        fn visit_while_stmt(&mut self, ast: &mut Ast, while_statement: &WhileStmt) {
             self.actual.push(TestAstNode::While);
             self.visit_expr(ast, while_statement.condition);
             self.visit_expr(ast, while_statement.body);
@@ -868,12 +853,7 @@ mod test {
             }
         }
 
-        fn visit_call_expression(
-            &mut self,
-            ast: &mut Ast,
-            call_expression: &CallExpr,
-            _expr: &Expr,
-        ) {
+        fn visit_call_expr(&mut self, ast: &mut Ast, call_expression: &CallExpr, _expr: &Expr) {
             self.actual.push(TestAstNode::Call);
             for argument in &call_expression.arguments {
                 self.visit_expr(ast, *argument);
