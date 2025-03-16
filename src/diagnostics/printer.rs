@@ -77,7 +77,8 @@ impl<'a> DiagnosticsPrinter<'a> {
         line: &'a str,
         column: usize,
     ) -> (&'a str, &'a str, &'a str) {
-        let prefix_start = std::cmp::max(0usize, column - PREFIX_LENGTH);
+        #[allow(clippy::cast_possible_wrap, clippy::cast_sign_loss)]
+        let prefix_start = std::cmp::max(0, column as isize - PREFIX_LENGTH as isize) as usize;
         let prefix_end = column;
         let suffix_start = std::cmp::min(column + diagnostic.span.length(), line.len());
         let suffix_end = std::cmp::min(suffix_start + PREFIX_LENGTH, line.len());

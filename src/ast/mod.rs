@@ -3,13 +3,13 @@
 //
 //     Licensed under the MIT License
 
-use std::collections::HashMap;
 use std::hash::Hash;
 
-use crate::ast::parser::Counter;
+use crate::compilation_unit::VariableIndex;
 use crate::typings::Type;
 use crate::{ast::lexer::Token, source::span::TextSpan};
 use printer::Printer;
+use terebinth::{Idx, IdxVec, idx};
 use termion::color::{Fg, Reset};
 use visitor::Visitor;
 
@@ -19,99 +19,84 @@ pub mod parser;
 pub mod printer;
 pub mod visitor;
 
-#[derive(Debug, Clone, Copy, Eq, PartialEq, Hash)]
-pub struct StmtId {
-    pub id: usize,
-}
+idx!(StmtId);
+idx!(ExprId);
+idx!(ItemId);
 
-impl StmtId {
-    pub fn new(id: usize) -> Self {
-        StmtId { id }
-    }
-}
-
-#[derive(Debug, Clone, Copy, Eq, PartialEq, Hash)]
-pub struct ExprId {
-    pub id: usize,
-}
-
-impl ExprId {
-    pub fn new(id: usize) -> Self {
-        ExprId { id }
-    }
-}
-
-#[derive(Debug, Clone)]
-pub struct NodeIdGenerator {
-    pub next_statement_id: Counter,
-    pub next_expression_id: Counter,
-}
-
-impl NodeIdGenerator {
-    pub fn new() -> Self {
-        Self {
-            next_statement_id: Counter::new(),
-            next_expression_id: Counter::new(),
-        }
-    }
-
-    pub fn next_statement_id(&self) -> StmtId {
-        let id = self.next_statement_id.get_value();
-        self.next_statement_id.increment();
-        StmtId::new(id)
-    }
-
-    pub fn next_expression_id(&self) -> ExprId {
-        let id = self.next_expression_id.get_value();
-        self.next_expression_id.increment();
-        ExprId::new(id)
-    }
-}
-
-#[derive(Debug, Clone)]
+#[cfg_attr(test, derive(Clone))]
+#[derive(Debug)]
 pub struct Ast {
-    pub statements: HashMap<StmtId, Statement>,
-    pub expressions: HashMap<ExprId, Expression>,
-    pub top_level_statements: Vec<StmtId>,
-    pub node_id_generator: NodeIdGenerator,
+    pub statements: IdxVec<StmtId, Stmt>,
+    pub expressions: IdxVec<ExprId, Expr>,
+    pub items: IdxVec<ItemId, Item>,
 }
 
 impl Ast {
     pub fn new() -> Self {
         Self {
-            statements: HashMap::new(),
-            expressions: HashMap::new(),
-            top_level_statements: Vec::new(),
-            node_id_generator: NodeIdGenerator::new(),
+            statements: IdxVec::new(),
+            expressions: IdxVec::new(),
+            items: IdxVec::new(),
         }
     }
 
-    pub fn query_expr(&self, expr_id: ExprId) -> &Expression {
-        &self.expressions[&expr_id]
+    pub fn query_item(&self, item_id: ItemId) -> &Item {
+        &self.items[item_id]
     }
 
-    pub fn query_stmt(&self, stmt_id: StmtId) -> &Statement {
-        &self.statements[&stmt_id]
+    pub fn query_expr(&self, expr_id: ExprId) -> &Expr {
+        &self.expressions[expr_id]
+    }
+
+    fn query_expr_mut(&mut self, expr_id: ExprId) -> &mut Expr {
+        &mut self.expressions[expr_id]
+    }
+
+    pub fn query_stmt(&self, stmt_id: StmtId) -> &Stmt {
+        &self.statements[stmt_id]
+    }
+
+    fn query_stmt_mut(&mut self, stmt_id: StmtId) -> &mut Stmt {
+        &mut self.statements[stmt_id]
+    }
+
+    pub fn set_variable(&mut self, expr_id: ExprId, variable_idx: VariableIndex) {
+        let expr = self.query_expr_mut(expr_id);
+        match &mut expr.kind {
+            ExprKind::Assignment(assign_expr) => {
+                assign_expr.variable_idx = variable_idx;
+            }
+            ExprKind::Variable(var_expr) => {
+                var_expr.variable_idx = variable_idx;
+            }
+            _ => unreachable!("Cannot set variable of non-variable expression"),
+        }
+    }
+
+    pub fn set_variable_for_stmt(&mut self, stmt_id: StmtId, variable_idx: VariableIndex) {
+        let stmt = self.query_stmt_mut(stmt_id);
+        match &mut stmt.kind {
+            StmtKind::Let(var_decl) => {
+                var_decl.variable_idx = variable_idx;
+            }
+            _ => unreachable!("Cannot set variable of non-variable statement"),
+        }
     }
 
     pub fn set_type(&mut self, expr_id: ExprId, expr_type: Type) {
-        let expr = self.expressions.get_mut(&expr_id).unwrap();
-        expr.expr_type = expr_type;
+        let expr = &mut self.expressions[expr_id];
+        expr.ty = expr_type;
     }
 
-    pub fn mark_top_level_statement(&mut self, stmt_id: StmtId) {
-        self.top_level_statements.push(stmt_id);
+    pub fn stmt_from_kind(&mut self, kind: StmtKind) -> &Stmt {
+        let stmt = Stmt::new(kind, StmtId::new(0));
+        let id = self.statements.push(stmt);
+        self.statements[id].id = id;
+        &self.statements[id]
     }
 
-    fn stmt_from_kind(&mut self, kind: StatementKind) -> &Statement {
-        let stmt = Statement::new(kind, self.node_id_generator.next_statement_id());
-        let id = stmt.id;
-        self.statements.insert(id, stmt);
-        &self.statements[&id]
-    }
-
-    pub fn expression_statement(&mut self, expr_id: ExprId) -> &Statement {
-        self.stmt_from_kind(StatementKind::Expression(expr_id))
+    pub fn expression_statement(&mut self, expr_id: ExprId) -> &Stmt {
+        self.stmt_from_kind(StmtKind::Expr(expr_id))
     }
 
     pub fn let_statement(
@@ -119,22 +104,23 @@ impl Ast {
         identifier: Token,
         initializer: ExprId,
         type_annotation: Option<StaticTypeAnnotation>,
-    ) -> &Statement {
-        self.stmt_from_kind(StatementKind::Let(LetStatement {
+    ) -> &Stmt {
+        self.stmt_from_kind(StmtKind::Let(LetStmt {
             identifier,
             initializer,
             type_annotation,
+            variable_idx: VariableIndex::new(0),
         }))
     }
 
-    pub fn if_statement(
+    pub fn if_expr(
         &mut self,
         if_keyword: Token,
         condition: ExprId,
-        then: StmtId,
-        else_statement: Option<ElseStatement>,
-    ) -> &Statement {
-        self.stmt_from_kind(StatementKind::If(IfStatement {
+        then: ExprId,
+        else_statement: Option<ElseBranch>,
+    ) -> &Expr {
+        self.expr_from_kind(ExprKind::If(IfExpr {
             if_keyword,
             condition,
             then_branch: then,
@@ -142,20 +128,29 @@ impl Ast {
         }))
     }
 
-    pub fn block_statement(&mut self, statements: Vec<StmtId>) -> &Statement {
-        self.stmt_from_kind(StatementKind::Block(BlockStatement { statements }))
-    }
-
     pub fn while_statement(
         &mut self,
         while_keyword: Token,
         condition: ExprId,
-        body: StmtId,
-    ) -> &Statement {
-        self.stmt_from_kind(StatementKind::While(WhileStatement {
+        body: ExprId,
+    ) -> &Stmt {
+        self.stmt_from_kind(StmtKind::While(WhileStmt {
             while_keyword,
             condition,
             body,
+        }))
+    }
+
+    pub fn block_expression(
+        &mut self,
+        left_brace: Token,
+        stmts: Vec<StmtId>,
+        right_brace: Token,
+    ) -> &Expr {
+        self.expr_from_kind(ExprKind::Block(BlockExpr {
+            left_brace,
+            stmts,
+            right_brace,
         }))
     }
 
@@ -163,8 +158,8 @@ impl Ast {
         &mut self,
         return_keyword: Token,
         return_value: Option<ExprId>,
-    ) -> &Statement {
-        self.stmt_from_kind(StatementKind::Return(ReturnStatement {
+    ) -> &Stmt {
+        self.stmt_from_kind(StmtKind::Return(ReturnStmt {
             return_keyword,
             return_value,
         }))
@@ -176,8 +171,8 @@ impl Ast {
         parameters: Vec<FuncDeclParameter>,
         body: StmtId,
         return_type: Option<FunctionReturnType>,
-    ) -> &Statement {
-        self.stmt_from_kind(StatementKind::FuncDecl(FuncDeclStatement {
+    ) -> &Item {
+        self.item_from_kind(ItemKind::Func(FunctionDeclaration {
             identifier,
             parameters,
             body,
@@ -185,19 +180,22 @@ impl Ast {
         }))
     }
 
-    fn expr_from_kind(&mut self, kind: ExpressionKind) -> &Expression {
-        let expr = Expression::new(
-            kind,
-            self.node_id_generator.next_expression_id(),
-            Type::Unresolved,
-        );
-        let expr_id = expr.id;
-        self.expressions.insert(expr_id, expr);
-        &self.expressions[&expr_id]
+    pub fn item_from_kind(&mut self, kind: ItemKind) -> &Item {
+        let item = Item::new(kind, ItemId::new(0));
+        let id = self.items.push(item);
+        self.items[id].id = id;
+        &self.items[id]
     }
 
-    pub fn number_expression(&mut self, token: Token, number: i64) -> &Expression {
-        self.expr_from_kind(ExpressionKind::Number(NumberExpression { number, token }))
+    fn expr_from_kind(&mut self, kind: ExprKind) -> &Expr {
+        let expr = Expr::new(kind, ExprId::new(0), Type::Unresolved);
+        let id = self.expressions.push(expr);
+        self.expressions[id].id = id;
+        &self.expressions[id]
+    }
+
+    pub fn number_expression(&mut self, token: Token, number: i64) -> &Expr {
+        self.expr_from_kind(ExprKind::Number(NumberExpr { number, token }))
     }
 
     pub fn binary_expression(
@@ -205,8 +203,8 @@ impl Ast {
         operator: BinaryOperator,
         left: ExprId,
         right: ExprId,
-    ) -> &Expression {
-        self.expr_from_kind(ExpressionKind::Binary(BinaryExpression {
+    ) -> &Expr {
+        self.expr_from_kind(ExprKind::Binary(BinaryExpr {
             left,
             operator,
             right,
@@ -218,20 +216,23 @@ impl Ast {
         left_paren: Token,
         expression: ExprId,
         right_paren: Token,
-    ) -> &Expression {
-        self.expr_from_kind(ExpressionKind::Parenthesized(ParenthesizedExpression {
+    ) -> &Expr {
+        self.expr_from_kind(ExprKind::Parenthesized(ParenthesizedExpr {
             left_paren,
             expression,
             right_paren,
         }))
     }
 
-    pub fn variable_expression(&mut self, identifier: Token) -> &Expression {
-        self.expr_from_kind(ExpressionKind::Variable(VariableExpression { identifier }))
+    pub fn variable_expression(&mut self, identifier: Token) -> &Expr {
+        self.expr_from_kind(ExprKind::Variable(VariableExpr {
+            identifier,
+            variable_idx: VariableIndex::new(0),
+        }))
     }
 
-    pub fn unary_expression(&mut self, operator: UnaryOperator, operand: ExprId) -> &Expression {
-        self.expr_from_kind(ExpressionKind::Unary(UnaryExpression { operator, operand }))
+    pub fn unary_expression(&mut self, operator: UnaryOperator, operand: ExprId) -> &Expr {
+        self.expr_from_kind(ExprKind::Unary(UnaryExpr { operator, operand }))
     }
 
     pub fn assignment_expression(
@@ -239,16 +240,17 @@ impl Ast {
         identifier: Token,
         equals: Token,
         expression: ExprId,
-    ) -> &Expression {
-        self.expr_from_kind(ExpressionKind::Assignment(AssignmentExpression {
+    ) -> &Expr {
+        self.expr_from_kind(ExprKind::Assignment(AssignmentExpr {
             identifier,
             equals,
             expression,
+            variable_idx: VariableIndex::new(0),
         }))
     }
 
-    pub fn boolean_expression(&mut self, token: Token, value: bool) -> &Expression {
-        self.expr_from_kind(ExpressionKind::Boolean(BooleanExpression { value, token }))
+    pub fn boolean_expression(&mut self, token: Token, value: bool) -> &Expr {
+        self.expr_from_kind(ExprKind::Boolean(BooleanExpr { value, token }))
     }
 
     pub fn call_expression(
@@ -257,8 +259,8 @@ impl Ast {
         left_paren: Token,
         arguments: Vec<ExprId>,
         right_paren: Token,
-    ) -> &Expression {
-        self.expr_from_kind(ExpressionKind::Call(CallExpression {
+    ) -> &Expr {
+        self.expr_from_kind(ExprKind::Call(CallExpr {
             identifier,
             left_paren,
             arguments,
@@ -266,36 +268,51 @@ impl Ast {
         }))
     }
 
-    pub fn error_expression(&mut self, span: TextSpan) -> &Expression {
-        self.expr_from_kind(ExpressionKind::Error(span))
+    pub fn error_expression(&mut self, span: TextSpan) -> &Expr {
+        self.expr_from_kind(ExprKind::Error(span))
     }
 
-    pub fn visit(&self, visitor: &mut dyn Visitor) {
-        for statement in &self.top_level_statements {
-            visitor.visit_statement(*statement);
+    pub fn visit(&mut self, visitor: &mut dyn Visitor) {
+        for item in self.items.clone().iter() {
+            visitor.visit_item(self, item.id);
         }
     }
 
-    pub fn visualize(&self) {
-        let mut printer = Printer::new(self);
+    pub fn visualize(&mut self) {
+        let mut printer = Printer::new();
         self.visit(&mut printer);
         println!("{}", printer.result);
     }
 }
 
 #[derive(Debug, Clone)]
-pub enum StatementKind {
-    Expression(ExprId),
-    Let(LetStatement),
-    If(IfStatement),
-    Block(BlockStatement),
-    While(WhileStatement),
-    FuncDecl(FuncDeclStatement),
-    Return(ReturnStatement),
+pub struct Item {
+    pub id: ItemId,
+    pub kind: ItemKind,
+}
+
+impl Item {
+    pub fn new(kind: ItemKind, id: ItemId) -> Self {
+        Self { id, kind }
+    }
 }
 
 #[derive(Debug, Clone)]
-pub struct ReturnStatement {
+pub enum ItemKind {
+    Func(FunctionDeclaration),
+    Stmt(StmtId),
+}
+
+#[derive(Debug, Clone)]
+pub enum StmtKind {
+    Expr(ExprId),
+    Let(LetStmt),
+    While(WhileStmt),
+    Return(ReturnStmt),
+}
+
+#[derive(Debug, Clone)]
+pub struct ReturnStmt {
     pub return_keyword: Token,
     pub return_value: Option<ExprId>,
 }
@@ -333,7 +350,7 @@ pub struct FuncDeclParameter {
 }
 
 #[derive(Debug, Clone)]
-pub struct FuncDeclStatement {
+pub struct FunctionDeclaration {
     pub identifier: Token,
     pub parameters: Vec<FuncDeclParameter>,
     pub body: StmtId,
@@ -342,76 +359,105 @@ pub struct FuncDeclStatement {
 
 #[allow(dead_code)]
 #[derive(Debug, Clone)]
-pub struct WhileStatement {
+pub struct WhileStmt {
     pub while_keyword: Token,
     pub condition: ExprId,
-    pub body: StmtId,
+    pub body: ExprId,
 }
 
 #[derive(Debug, Clone)]
-pub struct BlockStatement {
-    pub statements: Vec<StmtId>,
+pub struct BlockExpr {
+    pub left_brace: Token,
+    pub stmts: Vec<StmtId>,
+    pub right_brace: Token,
 }
 
 #[allow(dead_code)]
 #[derive(Debug, Clone)]
-pub struct ElseStatement {
+pub struct ElseBranch {
     pub else_keyword: Token,
-    pub else_statement: StmtId,
+    pub expr: ExprId,
 }
 
-impl ElseStatement {
-    pub fn new(else_keyword: Token, else_statement: StmtId) -> Self {
-        ElseStatement {
-            else_keyword,
-            else_statement,
+impl ElseBranch {
+    pub fn new(else_keyword: Token, expr: ExprId) -> Self {
+        ElseBranch { else_keyword, expr }
+    }
+}
+
+#[allow(dead_code)]
+#[derive(Debug, Clone)]
+pub struct IfExpr {
+    pub if_keyword: Token,
+    pub condition: ExprId,
+    pub then_branch: ExprId,
+    pub else_branch: Option<ElseBranch>,
+}
+
+#[derive(Debug, Clone)]
+pub struct LetStmt {
+    pub identifier: Token,
+    pub initializer: ExprId,
+    pub type_annotation: Option<StaticTypeAnnotation>,
+    pub variable_idx: VariableIndex,
+}
+
+#[derive(Debug, Clone)]
+pub struct Stmt {
+    pub kind: StmtKind,
+    pub id: StmtId,
+}
+
+impl Stmt {
+    pub fn new(kind: StmtKind, id: StmtId) -> Self {
+        Stmt { kind, id }
+    }
+
+    pub fn span(&self, ast: &Ast) -> TextSpan {
+        match &self.kind {
+            StmtKind::Expr(expr_id) => ast.query_expr(*expr_id).span(ast),
+            StmtKind::Let(let_stmt) => {
+                let mut spans = vec![let_stmt.identifier.span.clone()];
+                if let Some(type_annotation) = &let_stmt.type_annotation {
+                    spans.push(type_annotation.colon.span.clone());
+                    spans.push(type_annotation.type_name.span.clone());
+                }
+                TextSpan::combine(spans)
+            }
+            StmtKind::While(while_stmt) => {
+                let mut spans = vec![while_stmt.while_keyword.span.clone()];
+                spans.push(ast.query_expr(while_stmt.condition).span(ast));
+                spans.push(ast.query_expr(while_stmt.body).span(ast));
+                TextSpan::combine(spans)
+            }
+            StmtKind::Return(return_stmt) => {
+                let mut spans = vec![return_stmt.return_keyword.span.clone()];
+                if let Some(return_value) = &return_stmt.return_value {
+                    spans.push(ast.query_expr(*return_value).span(ast));
+                }
+                TextSpan::combine(spans)
+            }
         }
     }
 }
 
-#[allow(dead_code)]
 #[derive(Debug, Clone)]
-pub struct IfStatement {
-    pub if_keyword: Token,
-    pub condition: ExprId,
-    pub then_branch: StmtId,
-    pub else_branch: Option<ElseStatement>,
-}
-
-#[derive(Debug, Clone)]
-pub struct LetStatement {
-    pub identifier: Token,
-    pub initializer: ExprId,
-    pub type_annotation: Option<StaticTypeAnnotation>,
-}
-
-#[derive(Debug, Clone)]
-pub struct Statement {
-    kind: StatementKind,
-    id: StmtId,
-}
-
-impl Statement {
-    pub fn new(kind: StatementKind, id: StmtId) -> Self {
-        Statement { kind, id }
-    }
-}
-
-#[derive(Debug, Clone)]
-pub enum ExpressionKind {
-    Number(NumberExpression),
-    Binary(BinaryExpression),
-    Unary(UnaryExpression),
-    Parenthesized(ParenthesizedExpression),
-    Variable(VariableExpression),
-    Assignment(AssignmentExpression),
-    Boolean(BooleanExpression),
-    Call(CallExpression),
+pub enum ExprKind {
+    Number(NumberExpr),
+    Binary(BinaryExpr),
+    Unary(UnaryExpr),
+    Parenthesized(ParenthesizedExpr),
+    Variable(VariableExpr),
+    Assignment(AssignmentExpr),
+    Boolean(BooleanExpr),
+    Call(CallExpr),
+    If(IfExpr),
+    Block(BlockExpr),
     Error(TextSpan),
 }
 
 #[derive(Debug, Clone)]
-pub struct CallExpression {
+pub struct CallExpr {
     pub identifier: Token,
     pub left_paren: Token,
     pub arguments: Vec<ExprId>,
@@ -419,16 +465,17 @@ pub struct CallExpression {
 }
 
 #[derive(Debug, Clone)]
-pub struct BooleanExpression {
+pub struct BooleanExpr {
     pub value: bool,
     pub token: Token,
 }
 
 #[derive(Debug, Clone)]
-pub struct AssignmentExpression {
+pub struct AssignmentExpr {
     pub identifier: Token,
     pub equals: Token,
     pub expression: ExprId,
+    pub variable_idx: VariableIndex,
 }
 
 #[derive(Debug, Clone)]
@@ -450,28 +497,32 @@ impl UnaryOperator {
 }
 
 #[derive(Debug, Clone)]
-pub struct UnaryExpression {
+pub struct UnaryExpr {
     pub operator: UnaryOperator,
     pub operand: ExprId,
 }
 
 #[derive(Debug, Clone)]
-pub struct VariableExpression {
+pub struct VariableExpr {
     pub identifier: Token,
+    pub variable_idx: VariableIndex,
 }
 
 #[derive(Debug, Clone)]
 pub enum BinaryOperatorKind {
+    // Arithmetic
     Plus,
     Minus,
     Multiply,
     Divide,
     Power,
+    // Bitwise
     BitwiseAnd,
     BitwiseOr,
     BitwiseXor,
     LeftShift,
     RightShift,
+    // Relational
     Equals,
     NotEquals,
     LessThan,
@@ -523,70 +574,70 @@ impl BinaryOperator {
 }
 
 #[derive(Debug, Clone)]
-pub struct BinaryExpression {
+pub struct BinaryExpr {
     pub left: ExprId,
     pub operator: BinaryOperator,
     pub right: ExprId,
 }
 
 #[derive(Debug, Clone)]
-pub struct NumberExpression {
+pub struct NumberExpr {
     pub number: i64,
     pub token: Token,
 }
 
 #[derive(Debug, Clone)]
-pub struct ParenthesizedExpression {
+pub struct ParenthesizedExpr {
     pub left_paren: Token,
     pub expression: ExprId,
     pub right_paren: Token,
 }
 
 #[derive(Debug, Clone)]
-pub struct Expression {
-    pub kind: ExpressionKind,
+pub struct Expr {
+    pub kind: ExprKind,
     pub id: ExprId,
-    pub expr_type: Type,
+    pub ty: Type,
 }
 
-impl Expression {
-    pub fn new(kind: ExpressionKind, id: ExprId, expr_type: Type) -> Self {
-        Expression {
+impl Expr {
+    pub fn new(kind: ExprKind, id: ExprId, expr_type: Type) -> Self {
+        Expr {
             kind,
             id,
-            expr_type,
+            ty: expr_type,
         }
     }
 
     pub fn span(&self, ast: &Ast) -> TextSpan {
         match &self.kind {
-            ExpressionKind::Number(expr) => expr.token.span.clone(),
-            ExpressionKind::Binary(expr) => {
+            ExprKind::Number(expr) => expr.token.span.clone(),
+            ExprKind::Binary(expr) => {
                 let left = ast.query_expr(expr.left).span(ast);
                 let operator = expr.operator.token.span.clone();
                 let right = ast.query_expr(expr.right).span(ast);
                 TextSpan::combine(vec![left, operator, right])
             }
-            ExpressionKind::Unary(expr) => {
+            ExprKind::Unary(expr) => {
                 let operator = expr.operator.token.span.clone();
                 let operand = ast.query_expr(expr.operand).span(ast);
                 TextSpan::combine(vec![operator, operand])
             }
-            ExpressionKind::Parenthesized(expr) => {
+            ExprKind::Parenthesized(expr) => {
                 let open_paren = expr.left_paren.span.clone();
                 let expression = ast.query_expr(expr.expression).span(ast);
                 let close_paren = expr.right_paren.span.clone();
                 TextSpan::combine(vec![open_paren, expression, close_paren])
             }
-            ExpressionKind::Variable(expr) => expr.identifier.span.clone(),
-            ExpressionKind::Assignment(expr) => {
+            ExprKind::Variable(expr) => expr.identifier.span.clone(),
+            ExprKind::Assignment(expr) => {
                 let identifier = expr.identifier.span.clone();
                 let equals = expr.equals.span.clone();
                 let expression = ast.query_expr(expr.expression).span(ast);
                 TextSpan::combine(vec![identifier, equals, expression])
             }
-            ExpressionKind::Boolean(expr) => expr.token.span.clone(),
-            ExpressionKind::Call(expr) => {
+            ExprKind::Boolean(expr) => expr.token.span.clone(),
+            ExprKind::Call(expr) => {
                 let identifier = expr.identifier.span.clone();
                 let left_paren = expr.left_paren.span.clone();
                 let right_paren = expr.right_paren.span.clone();
@@ -596,7 +647,27 @@ impl Expression {
                 }
                 TextSpan::combine(spans)
             }
-            ExpressionKind::Error(span) => span.clone(),
+            ExprKind::If(expr) => {
+                let if_span = expr.if_keyword.span.clone();
+                let condition = ast.query_expr(expr.condition).span(ast);
+                let then_branch = ast.query_expr(expr.then_branch).span(ast);
+                let mut spans = vec![if_span, condition, then_branch];
+                if let Some(else_branch) = &expr.else_branch {
+                    let else_span = else_branch.else_keyword.span.clone();
+                    spans.push(else_span);
+                    spans.push(ast.query_expr(else_branch.expr).span(ast));
+                }
+                TextSpan::combine(spans)
+            }
+            ExprKind::Block(expr) => {
+                let mut spans = vec![expr.left_brace.span.clone()];
+                for statement in &expr.stmts {
+                    spans.push(ast.query_stmt(*statement).span(ast));
+                }
+                spans.push(expr.right_brace.span.clone());
+                TextSpan::combine(spans)
+            }
+            ExprKind::Error(span) => span.clone(),
         }
     }
 }
@@ -608,8 +679,8 @@ mod test {
     use crate::source::span::TextSpan;
 
     use super::{
-        AssignmentExpression, Ast, BinaryExpression, BlockStatement, BooleanExpression,
-        CallExpression, Expression, IfStatement, ReturnStatement, UnaryExpression, WhileStatement,
+        AssignmentExpr, Ast, BinaryExpr, BlockExpr, BooleanExpr, CallExpr, Expr, IfExpr, LetStmt,
+        ReturnStmt, Stmt, UnaryExpr, WhileStmt,
     };
 
     #[derive(Debug, PartialEq, Eq)]
@@ -651,7 +722,7 @@ mod test {
 
         fn flatten_ast(&mut self) {
             self.actual.clear();
-            let ast = &self.ast.clone();
+            let mut ast = self.ast.clone();
             ast.visit(&mut *self);
         }
 
@@ -659,9 +730,10 @@ mod test {
             assert_eq!(
                 self.expected.len(),
                 self.actual.len(),
-                "Expected {} nodes, but got {}",
+                "Expected {} nodes, but got {}. Actual nodes: {:?}",
                 self.expected.len(),
-                self.actual.len()
+                self.actual.len(),
+                self.actual
             );
 
             for (index, (expected, actual)) in
@@ -677,118 +749,114 @@ mod test {
     }
 
     impl Visitor for Verifier {
-        fn get_ast(&self) -> &Ast {
-            &self.ast
-        }
-
-        fn visit_func_decl_statement(&mut self, func_decl_statement: &super::FuncDeclStatement) {
+        fn visit_func_decl_stmt(
+            &mut self,
+            ast: &mut Ast,
+            func_decl_statement: &super::FunctionDeclaration,
+        ) {
             self.actual.push(TestAstNode::Func);
-            self.visit_statement(func_decl_statement.body);
+            self.visit_stmt(ast, func_decl_statement.body);
         }
 
-        fn visit_return_statement(&mut self, return_statement: &ReturnStatement) {
+        fn visit_return_stmt(&mut self, ast: &mut Ast, return_statement: &ReturnStmt) {
             self.actual.push(TestAstNode::Return);
             if let Some(expr) = &return_statement.return_value {
-                self.visit_expression(*expr);
+                self.visit_expr(ast, *expr);
             }
         }
 
-        fn visit_let_statement(&mut self, let_statement: &super::LetStatement) {
+        fn visit_let_stmt(&mut self, ast: &mut Ast, let_statement: &LetStmt, _stmt: &Stmt) {
             self.actual.push(TestAstNode::Let);
-            self.visit_expression(let_statement.initializer);
+            self.visit_expr(ast, let_statement.initializer);
         }
 
-        fn visit_variable_expression(
+        fn visit_variable_expr(
             &mut self,
-            variable_expression: &super::VariableExpression,
-            _expr: &Expression,
+            _ast: &mut Ast,
+            variable_expression: &super::VariableExpr,
+            _expr: &Expr,
         ) {
             self.actual.push(TestAstNode::Variable(
                 variable_expression.identifier.span.literal.clone(),
             ));
         }
 
-        fn visit_assignment_expression(
+        fn visit_assignment_expr(
             &mut self,
-            assignment_expression: &AssignmentExpression,
-            _expr: &Expression,
+            ast: &mut Ast,
+            assignment_expression: &AssignmentExpr,
+            _expr: &Expr,
         ) {
             self.actual.push(TestAstNode::Assignment);
-            self.visit_expression(assignment_expression.expression);
+            self.visit_expr(ast, assignment_expression.expression);
         }
 
-        fn visit_number_expression(
-            &mut self,
-            number: &super::NumberExpression,
-            _expr: &Expression,
-        ) {
+        fn visit_number_expr(&mut self, _ast: &mut Ast, number: &super::NumberExpr, _expr: &Expr) {
             self.actual.push(TestAstNode::Number(number.number));
         }
 
-        fn visit_error(&mut self, _span: &TextSpan) {
+        fn visit_error(&mut self, _ast: &mut Ast, _span: &TextSpan) {
             // TODO
         }
 
-        fn visit_unary_expression(
-            &mut self,
-            unary_expression: &UnaryExpression,
-            _expr: &Expression,
-        ) {
+        fn visit_unary_expr(&mut self, ast: &mut Ast, unary_expression: &UnaryExpr, _expr: &Expr) {
             self.actual.push(TestAstNode::Unary);
-            self.visit_expression(unary_expression.operand);
+            self.visit_expr(ast, unary_expression.operand);
         }
 
-        fn visit_parenthesized_expression(
+        fn visit_parenthesized_expr(
             &mut self,
-            parenthesized_expression: &super::ParenthesizedExpression,
-            _expr: &Expression,
+            ast: &mut Ast,
+            parenthesized_expression: &super::ParenthesizedExpr,
+            _expr: &Expr,
         ) {
             self.actual.push(TestAstNode::Parenthesized);
-            self.visit_expression(parenthesized_expression.expression);
+            self.visit_expr(ast, parenthesized_expression.expression);
         }
 
-        fn visit_binary_expression(
+        fn visit_binary_expr(
             &mut self,
-            binary_expression: &BinaryExpression,
-            _expr: &Expression,
+            ast: &mut Ast,
+            binary_expression: &BinaryExpr,
+            _expr: &Expr,
         ) {
             self.actual.push(TestAstNode::Binary);
-            self.visit_expression(binary_expression.left);
-            self.visit_expression(binary_expression.right);
+            self.visit_expr(ast, binary_expression.left);
+            self.visit_expr(ast, binary_expression.right);
         }
 
-        fn visit_boolean_expression(&mut self, boolean: &BooleanExpression, _expr: &Expression) {
+        fn visit_boolean_expr(&mut self, _ast: &mut Ast, boolean: &BooleanExpr, _expr: &Expr) {
             self.actual.push(TestAstNode::Boolean(boolean.value));
         }
 
-        fn visit_if_statement(&mut self, if_statement: &IfStatement) {
+        fn visit_if_expr(&mut self, ast: &mut Ast, if_statement: &IfExpr, _expr: &Expr) {
             self.actual.push(TestAstNode::If);
-            self.visit_expression(if_statement.condition);
-            self.visit_statement(if_statement.then_branch);
+            self.visit_expr(ast, if_statement.condition);
+            self.visit_expr(ast, if_statement.then_branch);
             if let Some(else_branch) = &if_statement.else_branch {
                 self.actual.push(TestAstNode::Else);
 
-                self.visit_statement(else_branch.else_statement);
+                self.visit_expr(ast, else_branch.expr);
             }
         }
 
-        fn visit_while_statement(&mut self, while_statement: &WhileStatement) {
+        fn visit_while_stmt(&mut self, ast: &mut Ast, while_statement: &WhileStmt) {
             self.actual.push(TestAstNode::While);
-            self.visit_expression(while_statement.condition);
-            self.visit_statement(while_statement.body);
+            self.visit_expr(ast, while_statement.condition);
+            self.visit_expr(ast, while_statement.body);
         }
 
-        fn visit_block_statement(&mut self, block_statement: &BlockStatement) {
+        fn visit_block_expr(&mut self, ast: &mut Ast, block_statement: &BlockExpr, _expr: &Expr) {
             self.actual.push(TestAstNode::Block);
-            for statement in &block_statement.statements {
-                self.visit_statement(*statement);
+            for statement in &block_statement.stmts {
+                self.visit_stmt(ast, *statement);
             }
         }
 
-        fn visit_call_expression(&mut self, call_expression: &CallExpression, _expr: &Expression) {
+        fn visit_call_expr(&mut self, ast: &mut Ast, call_expression: &CallExpr, _expr: &Expr) {
             self.actual.push(TestAstNode::Call);
             for argument in &call_expression.arguments {
-                self.visit_expression(*argument);
+                self.visit_expr(ast, *argument);
             }
         }
     }
