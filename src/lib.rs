@@ -1,3 +1,8 @@
+//     terebinth - lightweight programming language
+//     Copyright (C) 2024 Cameron Howell
+//
+//     Licensed under the MIT License
+
 #[macro_export]
 macro_rules! idx {
     ($name:ident) => {
@@ -61,6 +66,7 @@ where
             .map(|(index, value)| (Index::new(index), value))
     }
 
+    #[must_use]
     pub fn cloned_indices(&self) -> Vec<Index> {
         self.vec
             .iter()
@@ -69,10 +75,12 @@ where
             .collect()
     }
 
+    #[must_use]
     pub fn len(&self) -> usize {
         self.vec.len()
     }
 
+    #[must_use]
     pub fn is_empty(&self) -> bool {
         self.vec.is_empty()
     }

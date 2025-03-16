@@ -3,10 +3,8 @@
 //
 //     Licensed under the MIT License
 
-use std::collections::HashMap;
 use std::hash::Hash;
 
-use crate::ast::parser::Counter;
 use crate::compilation_unit::VariableIndex;
 use crate::typings::Type;
 use crate::{ast::lexer::Token, source::span::TextSpan};
@@ -75,8 +73,8 @@ impl Ast {
         }
     }
 
-    pub fn set_variable_for_stmt(&mut self, stmt_id: &StmtId, variable_idx: VariableIndex) {
-        let stmt = self.query_stmt_mut(*stmt_id);
+    pub fn set_variable_for_stmt(&mut self, stmt_id: StmtId, variable_idx: VariableIndex) {
+        let stmt = self.query_stmt_mut(stmt_id);
         match &mut stmt.kind {
             StmtKind::Let(var_decl) => {
                 var_decl.variable_idx = variable_idx;
@@ -87,7 +85,7 @@ impl Ast {
 
     pub fn set_type(&mut self, expr_id: ExprId, expr_type: Type) {
         let expr = &mut self.expressions[expr_id];
-        expr.expr_type = expr_type;
+        expr.ty = expr_type;
     }
 
     pub fn stmt_from_kind(&mut self, kind: StmtKind) -> &Stmt {
@@ -295,7 +293,7 @@ pub struct Item {
 
 impl Item {
     pub fn new(kind: ItemKind, id: ItemId) -> Self {
-        Self { kind, id }
+        Self { id, kind }
     }
 }
 
@@ -406,8 +404,8 @@ pub struct LetStmt {
 
 #[derive(Debug, Clone)]
 pub struct Stmt {
-    kind: StmtKind,
-    id: StmtId,
+    pub kind: StmtKind,
+    pub id: StmtId,
 }
 
 impl Stmt {
@@ -599,7 +597,7 @@ pub struct ParenthesizedExpr {
 pub struct Expr {
     pub kind: ExprKind,
     pub id: ExprId,
-    pub expr_type: Type,
+    pub ty: Type,
 }
 
 impl Expr {
@@ -607,7 +605,7 @@ impl Expr {
         Expr {
             kind,
             id,
-            expr_type,
+            ty: expr_type,
         }
     }
 
@@ -767,7 +765,7 @@ mod test {
             }
         }
 
-        fn visit_let_statement(&mut self, ast: &mut Ast, let_statement: &LetStmt, stmt: &Stmt) {
+        fn visit_let_statement(&mut self, ast: &mut Ast, let_statement: &LetStmt, _stmt: &Stmt) {
             self.actual.push(TestAstNode::Let);
             self.visit_expr(ast, let_statement.initializer);
         }
@@ -846,7 +844,7 @@ mod test {
             self.actual.push(TestAstNode::Boolean(boolean.value));
         }
 
-        fn visit_if_expr(&mut self, ast: &mut Ast, if_statement: &IfExpr, expr: &Expr) {
+        fn visit_if_expr(&mut self, ast: &mut Ast, if_statement: &IfExpr, _expr: &Expr) {
             self.actual.push(TestAstNode::If);
             self.visit_expr(ast, if_statement.condition);
             self.visit_expr(ast, if_statement.then_branch);
@@ -863,7 +861,7 @@ mod test {
             self.visit_expr(ast, while_statement.body);
         }
 
-        fn visit_block_expr(&mut self, ast: &mut Ast, block_statement: &BlockExpr, expr: &Expr) {
+        fn visit_block_expr(&mut self, ast: &mut Ast, block_statement: &BlockExpr, _expr: &Expr) {
             self.actual.push(TestAstNode::Block);
             for statement in &block_statement.stmts {
                 self.visit_stmt(ast, *statement);

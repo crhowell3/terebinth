@@ -40,7 +40,7 @@ fn main() -> Result<(), ()> {
     let file_path = args.source_file;
     let file_contents = std::fs::read_to_string(file_path).map_err(|_| ())?;
 
-    let compilation_unit = CompilationUnit::compile(&file_contents).map_err(|_| ())?;
+    let mut compilation_unit = CompilationUnit::compile(&file_contents).map_err(|_| ())?;
     compilation_unit.run();
     Ok(())
 }

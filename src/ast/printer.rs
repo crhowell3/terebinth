@@ -8,6 +8,8 @@ use crate::ast::{
     StaticTypeAnnotation, StmtId, UnaryExpr, VariableExpr, Visitor, WhileStmt,
 };
 
+use super::Stmt;
+
 pub struct Printer {
     indent: usize,
     pub result: String,
@@ -136,7 +138,7 @@ impl Visitor for Printer {
         self.visit_expr(ast, while_statement.body);
     }
 
-    fn visit_if_expr(&mut self, ast: &mut Ast, if_statement: &IfExpr) {
+    fn visit_if_expr(&mut self, ast: &mut Ast, if_statement: &IfExpr, _expr: &Expr) {
         self.add_keyword("if");
         self.add_whitespace();
         self.visit_expr(ast, if_statement.condition);
@@ -149,7 +151,7 @@ impl Visitor for Printer {
         }
     }
 
-    fn visit_let_statement(&mut self, ast: &mut Ast, let_statement: &LetStmt) {
+    fn visit_let_statement(&mut self, ast: &mut Ast, let_statement: &LetStmt, _stmt: &Stmt) {
         self.add_keyword("let");
         self.add_whitespace();
         self.add_text(let_statement.identifier.span.literal.as_str());
@@ -181,7 +183,7 @@ impl Visitor for Printer {
         self.result.push_str(&format!("{}\n", Fg(Reset)));
     }
 
-    fn visit_block_expr(&mut self, ast: &mut Ast, block_statement: &BlockExpr) {
+    fn visit_block_expr(&mut self, ast: &mut Ast, block_statement: &BlockExpr, _expr: &Expr) {
         self.add_text("{");
         self.add_newline();
         self.indent += 1;

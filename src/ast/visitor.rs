@@ -36,10 +36,10 @@ pub trait Visitor {
                 self.visit_let_statement(ast, expr, &statement);
             }
             StmtKind::While(stmt) => {
-                self.visit_while_statement(ast, &stmt);
+                self.visit_while_statement(ast, stmt);
             }
             StmtKind::Return(stmt) => {
-                self.visit_return_statement(ast, &stmt);
+                self.visit_return_statement(ast, stmt);
             }
         }
     }
@@ -61,13 +61,13 @@ pub trait Visitor {
         self.visit_expr(ast, while_statement.body);
     }
 
-    fn visit_block_expr(&mut self, ast: &mut Ast, block_expr: &BlockExpr, expr: &Expr) {
+    fn visit_block_expr(&mut self, ast: &mut Ast, block_expr: &BlockExpr, _expr: &Expr) {
         for stmt in &block_expr.stmts {
             self.visit_stmt(ast, *stmt);
         }
     }
 
-    fn visit_if_expr(&mut self, ast: &mut Ast, if_expr: &IfExpr, expr: &Expr) {
+    fn visit_if_expr(&mut self, ast: &mut Ast, if_expr: &IfExpr, _expr: &Expr) {
         self.visit_expr(ast, if_expr.condition);
         self.visit_expr(ast, if_expr.then_branch);
         if let Some(else_branch) = &if_expr.else_branch {
@@ -115,7 +115,7 @@ pub trait Visitor {
                 self.visit_if_expr(ast, expr, &expression);
             }
             ExprKind::Block(expr) => {
-                self.visit_block_expr(ast, &expr, &expression);
+                self.visit_block_expr(ast, expr, &expression);
             }
         }
     }
