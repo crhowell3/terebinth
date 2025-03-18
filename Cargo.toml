@@ -13,4 +13,6 @@ rust-version = "1.85"
 anyhow = "1.0.97"
 clap = { version = "4.5.31", features = ["derive"] }
 log = "0.4.21"
+memchr = "2.7.4"
 termion = "4.0.4"
+unicode-xid = "0.2.6"

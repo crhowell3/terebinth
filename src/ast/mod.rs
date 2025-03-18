@@ -7,15 +7,13 @@ use std::hash::Hash;
 
 use crate::compilation_unit::VariableIndex;
 use crate::typings::Type;
-use crate::{ast::lexer::Token, source::span::TextSpan};
+use crate::{lexer::Token, source::span::TextSpan};
 use printer::Printer;
 use terebinth::{Idx, IdxVec, idx};
 use termion::color::{Fg, Reset};
 use visitor::Visitor;
 
 pub mod evaluator;
-pub mod lexer;
-pub mod parser;
 pub mod printer;
 pub mod visitor;
 

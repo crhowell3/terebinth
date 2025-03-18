@@ -4,14 +4,14 @@ use std::rc::Rc;
 use terebinth::{Idx, IdxVec, idx};
 
 use crate::ast::evaluator::AstEvaluator;
-use crate::ast::lexer::{Lexer, Token};
-use crate::ast::parser::Parser;
 use crate::ast::{
     BinaryOperatorKind, BooleanExpr, CallExpr, Expr, FunctionDeclaration, IfExpr, LetStmt,
     NumberExpr, ParenthesizedExpr, ReturnStmt, Stmt, StmtId, StmtKind, UnaryExpr,
     UnaryOperatorKind, VariableExpr, WhileStmt,
 };
 use crate::ast::{BlockExpr, visitor::Visitor};
+use crate::lexer::{Lexer, Token};
+use crate::parser::Parser;
 use crate::source::span::TextSpan;
 use crate::typings::Type;
 use crate::{ast, diagnostics, source};

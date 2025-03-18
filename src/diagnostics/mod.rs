@@ -5,7 +5,7 @@
 
 use std::{cell::RefCell, rc::Rc};
 
-use crate::ast::lexer::{Token, TokenKind};
+use crate::lexer::{Token, TokenKind};
 use crate::source::span::TextSpan;
 use crate::typings::Type;
 
