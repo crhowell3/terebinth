@@ -1,17 +1,16 @@
-//     terebinth - lightweight programming language
-//     Copyright (C) 2024 Cameron Howell
-//
-//     Licensed under the MIT License
+//! The Terebinth compiler.
 
 use std::path::PathBuf;
 
+use crate::compilation_unit::CompilationUnit;
 use anyhow::Result;
 use clap::Parser;
-use compilation_unit::CompilationUnit;
 
 mod ast;
 mod compilation_unit;
 mod diagnostics;
+mod lexer;
+mod parser;
 mod source;
 mod typings;
 
@@ -35,7 +34,7 @@ fn check_extension(file_path: &str) -> Result<PathBuf, String> {
     Ok(file_path)
 }
 
-fn main() -> Result<(), ()> {
+pub fn main() -> Result<(), ()> {
     let args = Args::parse();
     let file_path = args.source_file;
     let file_contents = std::fs::read_to_string(file_path).map_err(|_| ())?;
