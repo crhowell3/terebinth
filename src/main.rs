@@ -10,6 +10,7 @@ mod ast;
 mod compilation_unit;
 mod diagnostics;
 mod lexer;
+mod llvm_codegen;
 mod parse;
 mod source;
 mod typings;

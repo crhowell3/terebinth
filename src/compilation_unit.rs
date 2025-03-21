@@ -11,7 +11,7 @@ use crate::ast::{
 };
 use crate::ast::{BlockExpr, visitor::Visitor};
 use crate::lexer::{Lexer, Token};
-use crate::parser::Parser;
+use crate::parse::Parser;
 use crate::source::span::TextSpan;
 use crate::typings::Type;
 use crate::{ast, diagnostics, source};
