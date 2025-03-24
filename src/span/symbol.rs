@@ -218,5 +218,97 @@ impl Interner {
         if let Some(idx) = inner.strings.get_index_of(string) {
             return Symbol::new(idx as u32);
         }
+
+        let string: &str = inner.arena.alloc_str(string);
+
+        let string: &'static str = unsafe { &*(string as *const str) };
+
+        let (idx, is_new) = inner.strings.insert_full(string);
+        debug_assert!(is_new);
+
+        Symbol::new(idx as u32)
     }
+
+    fn get(&self, symbol: Symbol) -> &str {
+        self.0
+            .lock()
+            .strings
+            .get_index(symbol.0.as_usize())
+            .unwrap()
+    }
+}
+
+pub mod kw {
+    pub use super::kw_generated::*;
+}
+
+pub mod sym {
+    use super::Symbol;
+    pub use super::kw::MacroRules as macro_rules;
+    #[doc(inline)]
+    pub use super::sym_generated::*;
+
+    pub fn integer<N: TryInto<usize> + Copy + itoa::Integer>(n: N) -> Symbol {
+        if let Result::Ok(idx) = n.try_into() {
+            if idx < 10 {
+                return Symbol::new(super::SYMBOL_DIGITS_BASE + idx as u32);
+            }
+        }
+        let mut buffer = itoa::Buffer::new();
+        let printed = buffer.format(n);
+        Symbol::intern(printed)
+    }
+}
+
+impl Symbol {
+    fn is_special(self) -> bool {
+        self <= kw::Underscore
+    }
+
+    fn is_used_keyword_always(self) -> bool {
+        self >= kw::As && self <= kw::While
+    }
+
+    pub fn is_reserved(self, edition: impl Copy + FnOnce() -> Edition) -> bool {
+        self.is_special || self.is_used_keyword_always()
+    }
+
+    pub fn is_bool_lit(self) -> bool {
+        self == kw::True || self == kw::False
+    }
+
+    pub fn is_preinterned(self) -> bool {
+        self.as_u32() < PREINTERNED_SYMBOLS_COUNT
+    }
+}
+
+impl Ident {
+    pub fn is_special(self) -> bool {
+        self.name.is_special()
+    }
+
+    pub fn is_used_keyword(self) -> bool {
+        self.name.is_used_keyword_always()
+    }
+
+    pub fn is_reserved(self) -> bool {
+        self.name.is_reserved(|| self.span.edition())
+    }
+
+    pub fn is_numeric(self) -> bool {
+        !self.name.is_empty() && self.as_str().bytes().all(|b| b.is_ascii_digit())
+    }
+}
+
+pub fn used_keywords(edition: impl Copy + FnOnce() -> Edition) -> Vec<Symbol> {
+    (kw::Empty.as_u32()..kw::While.as_u32())
+        .filter_map(|kw| {
+            let kw = Symbol::new(kw);
+            if kw.is_used_keyword_always() {
+                Some(kw)
+            } else {
+                None
+            }
+        })
+        .collect()
 }
