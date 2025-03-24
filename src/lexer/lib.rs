@@ -1,23 +1,19 @@
-//     terebinth - lightweight programming language
-//     Copyright (C) 2024 Cameron Howell
-//
-//     Licensed under the MIT License
+//! The low-level Terebinth lexer.
+//!
+//! The lexer tokenizes the Terebinth source code so that the parser can
+//! construct the abstract syntax tree. Each token is categorized by type,
+//! and invalid tokens are marked as such.
 
 mod cursor;
 
-use std::{
-    collections::HashMap,
-    fmt::{Display, Formatter},
-};
-
-use cursor::Cursor;
-
+pub use literal_escaper as unescape;
+use unicode_properties::UnicodeEmoji;
 pub use unicode_xid::UNICODE_VERSION as UNICODE_XID_VERSION;
 
 use self::LiteralKind::*;
 use self::TokenKind::*;
+pub use crate::lexer::cursor::Cursor;
 use crate::lexer::cursor::EOF_CHAR;
-use crate::source::span::TextSpan;
 
 /// A Token in Terebinth is an identifier, keyword, operator, or symbol.
 /// The Token will contain token type information as well as its length.
