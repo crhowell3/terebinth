@@ -12,9 +12,8 @@ use crate::ast::{
 use crate::ast::{BlockExpr, visitor::Visitor};
 use crate::lexer::{Lexer, Token};
 use crate::parse::Parser;
-use crate::source::span::TextSpan;
 use crate::typings::Type;
-use crate::{ast, diagnostics, source};
+use crate::{ast, diagnostics};
 use crate::{ast::Ast, diagnostics::DiagnosticsListCell};
 
 idx!(FunctionIndex);

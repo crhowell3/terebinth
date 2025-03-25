@@ -5,6 +5,11 @@
 //! the arena cannot be individually destroyed or deallocated while the arena is
 //! living. This just provides a method of fast memory allocation.
 
+#![allow(clippy::mut_from_ref)]
+#![allow(internal_features)]
+#![cfg_attr(test, feature(test))]
+#![deny(unsafe_op_in_unsafe_fn)]
+
 use std::alloc::Layout;
 use std::cell::{Cell, RefCell};
 use std::marker::PhantomData;

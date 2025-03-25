@@ -6,13 +6,14 @@ use crate::compilation_unit::CompilationUnit;
 use anyhow::Result;
 use clap::Parser;
 
+mod arena;
 mod ast;
 mod compilation_unit;
 mod diagnostics;
 mod lexer;
 mod llvm_codegen;
 mod parse;
-mod source;
+mod span;
 mod typings;
 
 #[derive(Parser, Debug)]

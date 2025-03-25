@@ -6,6 +6,8 @@
 
 pub mod edition;
 pub mod fatal_error;
+pub mod source_analysis;
+pub mod span_encoding;
 
 pub mod symbol;
 pub use symbol::{Ident, Symbol, kw, sym};
