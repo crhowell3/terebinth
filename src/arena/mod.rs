@@ -17,6 +17,8 @@ use std::mem::{self, MaybeUninit};
 use std::ptr::{self, NonNull};
 use std::{cmp, intrinsics, slice};
 
+use smallvec::SmallVec;
+
 #[inline(never)]
 #[cold]
 fn outline<F: FnOnce() -> R, R>(f: F) -> R {
@@ -111,7 +113,7 @@ impl<T> TypedArena<T> {
                 let ptr = self.ptr.get();
                 self.ptr.set(self.ptr.get().add(1));
                 ptr::write(ptr, object);
-                &mut *parameter
+                &mut *ptr
             }
         }
     }
