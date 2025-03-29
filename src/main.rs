@@ -4,6 +4,7 @@
 #![feature(core_intrinsics)]
 #![feature(decl_macro)]
 #![feature(dropck_eyepatch)]
+#![feature(negative_impls)]
 
 use std::path::PathBuf;
 

@@ -4,6 +4,8 @@
 //! data structure that contains the span's position within the source code as
 //! well as related metadata.
 
+use derive_where::derive_where;
+
 pub mod edition;
 pub mod fatal_error;
 pub mod source_analysis;
@@ -78,4 +80,111 @@ pub fn create_default_session_globals_then<R>(f: impl FnOnce() -> R) -> R {
     create_session_globals_then(edition::DEFAULT_EDITION, None, f)
 }
 
-scoped_tls::scoped_thread_local(static SESSION_GLOBALS: SessionGlobals);
+scoped_tls::scoped_thread_local!(static SESSION_GLOBALS: SessionGlobals);
+
+#[derive(Clone, Copy, Hash, PartialEq, Eq)]
+#[derive_where(PartialOrd, Ord)]
+pub struct SpanData {
+    pub lo: BytePos,
+    pub hi: BytePos,
+    #[derive_where(skip)]
+    pub ctx: SyntaxContext,
+    #[derive_where(skip)]
+    pub parent: Option<LocalDefId>,
+}
+
+impl SpanData {
+    #[inline]
+    pub fn span(&self) -> Span {
+        Span::new(self.lo, self.hi, self.ctx, self.parent)
+    }
+
+    #[inline]
+    pub fn with_lo(&self, lo: BytePos) -> Span {
+        Span::new(lo, self.hi, self.ctx, self.parent)
+    }
+
+    #[inline]
+    pub fn with_hi(&self, hi: BytePos) -> Span {
+        Span::new(self.lo, hi, self.ctx, self.parent)
+    }
+
+    #[inline]
+    pub fn with_ctx(&self, ctx: SyntaxContext) -> Span {
+        Span::new(self.lo, self.hi, ctx, self.parent)
+    }
+
+    #[inline]
+    pub fn with_parent(&self, parent: Option<LocalDefId>) -> Span {
+        Span::new(self.lo, self.hi, self.ctx, parent)
+    }
+
+    #[inline]
+    pub fn is_dummy(self) -> bool {
+        self.lo.0 == 0 && self.hi.0 == 0
+    }
+
+    pub fn contains(self, other: Self) -> bool {
+        self.lo <= other.lo && other.hi <= self.hi
+    }
+}
+
+impl Default for SpanData {
+    fn default() -> Self {
+        Self {
+            lo: BytePos(0),
+            hi: BytePos(0),
+            ctx: SyntaxContext::root(),
+            parent: None,
+        }
+    }
+}
+
+impl PartialOrd for Span {
+    fn partial_cmp(&self, rhs: &Self) -> Option<Ordering> {
+        PartialOrd::partial_cmp(&self.data(), &rhs.data())
+    }
+}
+
+impl Ord for Span {
+    fn cmp(&self, rhs: &Self) -> Ordering {
+        Ord::cmp(&self.data(), &rhs.data())
+    }
+}
+
+impl Span {
+    #[inline]
+    pub fn lo(self) -> BytePos {
+        self.data().lo
+    }
+
+    #[inline]
+    pub fn with_lo(self, lo: BytePos) -> Span {
+        self.data().with_lo(lo)
+    }
+
+    #[inline]
+    pub fn hi(self) -> BytePos {
+        self.data().hi
+    }
+
+    #[inline]
+    pub fn with_hi(self, hi: BytePos) -> Span {
+        self.data().with_hi(hi)
+    }
+
+    #[inline]
+    pub fn with_ctx(self, ctx: SyntaxContext) -> Span {
+        self.map_ctx(|_| ctx)
+    }
+
+    #[inline]
+    pub fn is_visible(self, sm: &SourceMap) -> bool {
+        !self.is_dummy() && sm.is_span_accessible(self)
+    }
+
+    #[inline]
+    pub fn with_root_ctx(lo: BytePos, hi: BytePos) -> Span {
+        Span::new(lo, hi, SyntaxContext::root(), None)
+    }
+}

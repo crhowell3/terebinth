@@ -12,8 +12,10 @@ rust-version = "1.85"
 [dependencies]
 anyhow = "1.0.97"
 clap = { version = "4.5.31", features = ["derive"] }
+derive-where = "1.2.7"
 log = "0.4.21"
 memchr = "2.7.4"
+scoped-tls = "1.0.1"
 smallvec = { version = "1.14.0", features = ["union", "may_dangle"]}
 termion = "4.0.4"
 unicode-xid = "0.2.6"
