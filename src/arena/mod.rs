@@ -142,7 +142,7 @@ impl<T> TypedArena<T> {
 
     #[inline]
     pub fn alloc_from_iter<I: IntoIterator<Item = T>>(&self, iter: I) -> &mut [T] {
-        assert!(sizeof::<T>() != 0);
+        assert!(size_of::<T>() != 0);
         let mut vec: SmallVec<[_; 8]> = iter.into_iter().collect();
         if vec.is_empty() {
             return &mut [];
@@ -318,7 +318,7 @@ impl DroplessArena {
         let mem = self.alloc_raw(Layout::new::<T>()) as *mut T;
 
         unsafe {
-            prt::write(mem, object);
+            ptr::write(mem, object);
             &mut *mem
         }
     }

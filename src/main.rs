@@ -1,5 +1,10 @@
 //! The Terebinth compiler.
 
+#![allow(internal_features)]
+#![feature(core_intrinsics)]
+#![feature(decl_macro)]
+#![feature(dropck_eyepatch)]
+
 use std::path::PathBuf;
 
 use crate::compilation_unit::CompilationUnit;
