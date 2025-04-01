@@ -31,7 +31,6 @@ mod ast;
 mod data_structures;
 mod lexer;
 mod llvm_codegen;
-mod macros;
 mod parse;
 mod serialize;
 mod span;

@@ -1,8 +1,28 @@
+// tidy-alphabetical-start
+#![allow(rustc::default_hash_types)]
+#![feature(if_let_guard)]
+#![feature(let_chains)]
+#![feature(never_type)]
+#![feature(proc_macro_diagnostic)]
+#![feature(proc_macro_span)]
+#![feature(proc_macro_tracked_env)]
+// tidy-alphabetical-end
+
 use proc_macro::TokenStream;
 use synstructure::decl_derive;
 
 mod current_version;
+mod diagnostics;
+mod extension;
+mod hash_stable;
+mod lift;
+mod print_attribute;
+mod query;
 mod serialize;
+mod symbols;
+mod try_from;
+mod type_foldable;
+mod type_visitable;
 
 #[proc_macro]
 pub fn current_terebinth_version(input: TokenStream) -> TokenStream {

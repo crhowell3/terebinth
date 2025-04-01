@@ -9,9 +9,6 @@ readme = "README.md"
 repository = "https://github.com/crhowell3/terebinth"
 rust-version = "1.85"
 
-[lib]
-proc-macro = true
-
 [dependencies]
 anyhow = "1.0.97"
 bitflags = "2.4.1"
@@ -22,6 +19,7 @@ log = "0.4.21"
 memchr = "2.7.4"
 scoped-tls = "1.0.1"
 smallvec = { version = "1.14.0", features = ["union", "may_dangle"]}
+terebinth_macros = { path = "./src/terebinth_macros" }
 termion = "4.0.4"
 tracing = "0.1"
 unicode-xid = "0.2.6"
