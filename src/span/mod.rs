@@ -4,15 +4,20 @@
 //! data structure that contains the span's position within the source code as
 //! well as related metadata.
 
-use core::{error::Source, fmt, hash, num};
-
-use anyhow::Error;
 use derive_where::derive_where;
-
+use crate::serialize::opaque::{FileEncoder, MemDecoder};
+use crate::serialize::{Decodable, Decoder, Encodable, Encoder};
 use tracing::debug;
 
+mod caching_source_map_view;
+pub mod source_map;
+use source_map::{SourceMap, SourceMapInputs};
+
+pub use self::caching_source_map_view::CachingSourceMapView;
+use fatal_error::FatalError;
+
 pub mod edition;
-pub mod fatal_error;
+use edition::Edition;
 pub mod source_analysis;
 pub mod span_encoding;
 

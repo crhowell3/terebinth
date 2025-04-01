@@ -2,7 +2,6 @@ use crate::ast::{
     AssignmentExpr, Ast, BinaryExpr, BlockExpr, BooleanExpr, ExprKind, IfExpr, LetStmt, NumberExpr,
     ParenthesizedExpr, StmtKind, UnaryExpr, VariableExpr,
 };
-use crate::source::span::TextSpan;
 
 use super::{
     CallExpr, Expr, ExprId, FunctionDeclaration, ItemId, ItemKind, ReturnStmt, Stmt, StmtId,

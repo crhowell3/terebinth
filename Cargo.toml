@@ -9,10 +9,15 @@ readme = "README.md"
 repository = "https://github.com/crhowell3/terebinth"
 rust-version = "1.85"
 
+[lib]
+proc-macro = true
+
 [dependencies]
 anyhow = "1.0.97"
+bitflags = "2.4.1"
 clap = { version = "4.5.31", features = ["derive"] }
 derive-where = "1.2.7"
+ena = "0.14.3"
 log = "0.4.21"
 memchr = "2.7.4"
 scoped-tls = "1.0.1"
