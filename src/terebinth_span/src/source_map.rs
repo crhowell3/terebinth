@@ -3,7 +3,7 @@ use std::{fs, path};
 
 use tracing::{debug, instrument, trace};
 
-use crate::serialize::{Decodable, Encodable};
+use terebinth_macros::{Decodable, Encodable};
 
 pub fn original_sp(sp: Span, enclosing_sp: Span) -> Span {
     let ctx = sp.ctx();

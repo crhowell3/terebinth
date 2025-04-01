@@ -1,40 +1,10 @@
 //! The Terebinth compiler.
 
-#![allow(internal_features)]
-#![feature(core_intrinsics)]
-#![feature(decl_macro)]
-#![feature(dropck_eyepatch)]
-#![feature(negative_impls)]
-#![feature(extend_one)]
-#![feature(file_buffered)]
-#![feature(macro_metavar_expr)]
-#![feature(map_try_insert)]
-#![feature(min_specialization)]
-#![feature(auto_traits)]
-#![feature(never_type)]
-#![feature(ptr_alignment_type)]
-#![feature(rustc_attrs)]
-#![feature(rustdoc_internals)]
-#![feature(test)]
-#![feature(thread_id_value)]
-#![feature(type_alias_impl_trait)]
-#![feature(unwrap_infallible)]
-
 use std::panic::{self, PanicHookInfo, catch_unwind};
 use std::path::PathBuf;
 
 use anyhow::Result;
 use clap::Parser;
-
-mod arena;
-mod ast;
-mod data_structures;
-mod lexer;
-mod llvm_codegen;
-mod parse;
-mod serialize;
-mod span;
-mod typings;
 
 #[derive(Parser, Debug)]
 #[clap(name = "terebinth")]

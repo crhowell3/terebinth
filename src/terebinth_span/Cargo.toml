@@ -1,0 +1,24 @@
+[package]
+name = "terebinth_span"
+version = "0.0.0"
+edition = "2024"
+
+[dependencies]
+# tidy-alphabetical-start
+blake3 = "1.5.2"
+derive-where = "1.2.7"
+indexmap = { version = "2.0.0" }
+itoa = "1.0"
+md5 = { package = "md-5", version = "0.10.0" }
+terebinth_arena_allocator = { path = "../terebinth_arena_allocator" }
+terebinth_data_structures = { path = "../terebinth_data_structures" }
+terebinth_hashes = { path = "../terebinth_hashes" }
+terebinth_index = { path = "../terebinth_index" }
+terebinth_macros = { path = "../terebinth_macros" }
+terebinth_serialize = { path = "../terebinth_serialize" }
+scoped-tls = "1.0"
+sha1 = "0.10.0"
+sha2 = "0.10.1"
+tracing = "0.1"
+unicode-width = "0.2.0"
+# tidy-alphabetical-end

@@ -4,6 +4,21 @@
 //! data structure that contains the span's position within the source code as
 //! well as related metadata.
 
+#![allow(internal_features)]
+#![feature(array_windows)]
+#![feature(cfg_match)]
+#![feature(core_io_borrowed_buf)]
+#![feature(hash_set_entry)]
+#![feature(if_let_guard)]
+#![feature(let_chains)]
+#![feature(map_try_insert)]
+#![feature(negative_impls)]
+#![feature(read_buf)]
+#![feature(round_char_boundary)]
+#![feature(rustc_attrs)]
+#![feature(rustdoc_internals)]
+#![feature(slice_as_chunks)]
+
 use derive_where::derive_where;
 use crate::serialize::opaque::{FileEncoder, MemDecoder};
 use crate::serialize::{Decodable, Decoder, Encodable, Encoder};

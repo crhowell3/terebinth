@@ -12,8 +12,8 @@ pub use unicode_xid::UNICODE_VERSION as UNICODE_XID_VERSION;
 
 use self::LiteralKind::*;
 use self::TokenKind::*;
-pub use crate::lexer::cursor::Cursor;
-use crate::lexer::cursor::EOF_CHAR;
+pub use crate::terebinth_lexer::cursor::Cursor;
+use crate::terebinth_lexer::cursor::EOF_CHAR;
 
 /// A Token in Terebinth is an identifier, keyword, operator, or symbol.
 /// The Token will contain token type information as well as its length.

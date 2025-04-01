@@ -1,4 +1,4 @@
-use crate::span::{BytePos, Symbol};
+use crate::terebinth_span::{BytePos, Symbol};
 
 use crate::token::CommentKind;
 

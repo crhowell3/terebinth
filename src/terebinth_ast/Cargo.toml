@@ -1,0 +1,19 @@
+[package]
+name = "terebinth_ast"
+version = "0.0.0"
+edition = "2024"
+
+[dependencies]
+bitflags = "2.4.1"
+literal-escaper = { path = "../../library/literal-escaper" }
+memchr = "2.7.4"
+terebinth_ast_ir = { path = "../terebinth_ast_ir" }
+terebinth_data_structures = { path = "../terebinth_data_structures" }
+terebinth_index = { path = "../terebinth_index" }
+terebinth_lexer = { path = "../terebinth_lexer" }
+terebinth_macros = { path = "../terebinth_macros" }
+terebinth_serialize = { path = "../terebinth_serialize" }
+terebinth_span = { path = "../terebinth_span" }
+smallvec = { version = "1.8.1", features = ["union", "may_dangle"] }
+thin-vec = "0.2.12"
+tracing = "0.1"
