@@ -428,6 +428,51 @@ impl Cursor<'_> {
         }
     }
 
+    fn single_quoted_string(&mut self) -> bool {
+        debug_assert!(self.prev() == '\'');
+        if self.second() == '\'' && self.first() != '\\' {
+            self.bump();
+            self.bump();
+            return true;
+        }
+
+        loop {
+            match self.first() {
+                '\'' => {
+                    self.bump();
+                    return true;
+                }
+                '/' => break,
+                '\n' if self.second() != '\'' => break,
+                EOF_CHAR if self.is_eof() => break,
+                '\\' => {
+                    self.bump();
+                    self.bump();
+                }
+                _ => {
+                    self.bump();
+                }
+            }
+        }
+        false
+    }
+
+    fn double_quoted_string(&mut self) -> bool {
+        debug_assert!(self.prev() = '"');
+        while let Some(c) = self.bump() {
+            match c {
+                '"' => {
+                    return true;
+                }
+                '\\' if self.first() == '\\' || self.first() == '"' => {
+                    self.bump();
+                }
+                _ => (),
+            }
+        }
+        false
+    }
+
     fn consume_decimal_digits(&mut self) -> bool {
         let mut has_digits = false;
         loop {

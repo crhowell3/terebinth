@@ -5,9 +5,11 @@
 //! well as related metadata.
 
 use core::{error::Source, fmt, hash, num};
-use std::char::DecodeUtf16;
 
+use anyhow::Error;
 use derive_where::derive_where;
+
+use tracing::debug;
 
 pub mod edition;
 pub mod fatal_error;
@@ -16,10 +18,21 @@ pub mod span_encoding;
 
 pub mod symbol;
 use source_analysis::analyze_source_file;
-use span_encoding::DUMMY_SP;
+pub use span_encoding::{DUMMY_SP, Span};
 pub use symbol::{Ident, Symbol, kw, sym};
 
 use crate::ast::node_id;
+
+use std::borrow::Cow;
+use std::cmp::{self, Ordering};
+use std::fmt::Display;
+use std::hash::Hash;
+use std::io::{self, Read};
+use std::ops::{Add, Range, Sub};
+use std::path::{Path, PathBuf};
+use std::str::FromStr;
+use std::sync::Arc;
+use std::{fmt, iter};
 
 pub struct SessionGlobals {
     symbol_interner: symbol::Interner,
@@ -1094,7 +1107,7 @@ impl SourceFile {
             return Err(OffsetOverflowError);
         }
 
-        let (lines, multibyte_chars) = analyze_source_file::analyze_source_file(&src);
+        let (lines, multibyte_chars) = source_analysis::analyze_source_file(&src);
 
         Ok(SourceFile {
             name,
@@ -1129,5 +1142,623 @@ impl SourceFile {
                 return;
             }
         };
+
+        let num_lines = num_diffs + 1;
+        let mut lines = Vec::with_capacity(num_lines);
+        let mut line_start = RelativeBytePos(0);
+        lines.push(line_start);
+
+        assert_eq!(*num_diffs, raw_diffs.len() / bytes_per_diff);
+        match bytes_per_diff {
+            1 => {
+                lines.extend(raw_diffs.into_iter().map(|&diff| {
+                    line_start = line_start + RelativeBytePos(diff as u32);
+                    line_start
+                }));
+            }
+            2 => {
+                lines.extend((0..*num_diffs).map(|i| {
+                    let pos = bytes_per_diff * i;
+                    let bytes = [raw_diffs[pos], raw_diffs[pos + 1]];
+                    let diff = u16::from_le_bytes(bytes);
+                    line_start = line_start + RelativeBytePos(diff as u32);
+                    line_start
+                }));
+            }
+            4 => {
+                lines.extend((0..*num_diffs).map(|i| {
+                    let pos = bytes_per_diff * i;
+                    let bytes = [
+                        raw_diffs[pos],
+                        raw_diffs[pos + 1],
+                        raw_diffs[pos + 2],
+                        raw_diffs[pos + 3],
+                    ];
+                    let diff = u32::from_le_bytes(bytes);
+                    line_start = line_start + RelativeBytePos(diff);
+                    line_start
+                }));
+            }
+            _ => unreachable!(),
+        }
+
+        *guard = SourceFileLines::Lines(lines);
+
+        FreezeWriteGuard::freeze(guard);
+    }
+
+    pub fn lines(&self) -> &[RelativeBytePos] {
+        if let Some(SourceFileLines::Lines(lines)) = self.lines.get() {
+            return &lines[..];
+        }
+
+        outline(|| {
+            self.convert_diffs_to_lines_frozen();
+            if let Some(SourceFileLines::Lines(lines)) = self.lines.get() {
+                return &lines[..];
+            }
+            unreachable!()
+        })
+    }
+
+    pub fn line_begin_pos(&self, pos: BytePos) -> BytePos {
+        let pos = self.relative_position(pos);
+        let line_index = self.lookup_line(pos).unwrap();
+        let line_start_pos = self.lines()[line_index];
+        self.absolute_position(line_start_pos)
+    }
+
+    pub fn add_external_src<F>(&self, get_src: F) -> bool
+    where
+        F: FnOnce() -> Option<String>,
+    {
+        if !self.external_src.is_frozen() {
+            let src = get_src();
+            let src = src.and_then(|mut src| {
+                self.src_hash.matches(&src).then(|| {
+                    normalize_src(&mut src);
+                    src
+                })
+            });
+
+            self.external_src.try_write().map(|mut external_src| {
+                if let ExternalSource::Foreign {
+                    kind: src_kind @ ExternalSourceKind::AbsentOk,
+                    ..
+                } = &mut *external_src
+                {
+                    *src_kind = if let Some(src) = src {
+                        ExternalSourceKind::Present(Arc::new(src))
+                    } else {
+                        ExternalSource::AbsentErr
+                    };
+                } else {
+                    panic!("Unexpected state {:?}", *external_src)
+                }
+
+                FreezeWriteGuard::freeze(external_src)
+            });
+        }
+
+        self.src.is_some() || self.external_src.read().get_source().is_some()
+    }
+
+    pub fn get_line(&self, line_number: usize) -> Option<Cow<'_, str>> {
+        fn get_until_newline(src: &str, begin: usize) -> &str {
+            let slice = &src[begin..];
+            match slice.find('\n') {
+                Some(e) => &slice[..e],
+                None => slice,
+            }
+        }
+
+        let begin = {
+            let line = self.lines().get(line_number).copied()?;
+            line.to_usize()
+        };
+
+        if let Some(ref src) = self.src {
+            Some(Cow::from(get_until_newline(src, begin)))
+        } else {
+            self.external_src
+                .borrow()
+                .get_source()
+                .map(|src| Cow::Owned(String::from(get_until_newline(src, begin))))
+        }
+    }
+
+    pub fn is_real_file(&self) -> bool {
+        self.name.is_real()
+    }
+
+    #[inline]
+    pub fn is_imported(&self) -> bool {
+        self.src.is_none()
+    }
+
+    pub fn count_lines(&self) -> usize {
+        self.lines().len()
+    }
+
+    #[inline]
+    pub fn absolute_position(&self, pos: RelativeBytePos) -> BytePos {
+        BytePos::from_u32(pos.to_u32() + self.start_pos.to_u32())
+    }
+
+    #[inline]
+    pub fn relative_position(&self, pos: BytePos) -> RelativeBytePos {
+        RelativeBytePos::from_u32(pos.to_u32() - self.start_pos.to_u32())
+    }
+
+    #[inline]
+    pub fn end_position(&self) -> BytePos {
+        self.absolute_position(self.source_len)
+    }
+
+    pub fn lookup_line(&self, pos: RelativeBytePos) -> Option<usize> {
+        self.lines().partition_point(|x| x <= &pos).checked_sub(1)
+    }
+
+    pub fn line_bounds(&self, line_index: usize) -> Range<BytePos> {
+        if self.is_empty() {
+            return self.start_pos..self.start_pos;
+        }
+
+        let lines = self.lines();
+        assert!(line_index < lines.len());
+        if line_index == (lines.len() - 1) {
+            self.absolute_position(lines[line_index])..self.end_position()
+        } else {
+            self.absolute_position(lines[line_index])..self..self.absolute_position(lines[line_index + 1])
+        }
+    }
+
+    #[inline]
+    pub fn contains(&self, byte_pos: BytePos) -> bool {
+        byte_pos >= self.start_pos && byte_pos <= self.end_position()
+    }
+
+    #[inline]
+    pub fn is_empty(&self) -> bool {
+        self.source_len.to_u32() == 0
+    }
+
+    pub fn original_relative_byte_pos(&self, pos: BytePos) -> RelativeBytePos {
+        let pos = self.relative_position(pos);
+
+        let diff = match self.normalized_pos.binary_search_by(|np| np.pos.cmp(&pos)) {
+            Ok(i) => self.normalized_pos[i].diff,
+            Err(0) => 0,
+            Err(i) => self.normalized_pos[i - 1].diff,
+        };
+
+        RelativeBytePos::from_u32(pos.0 + diff)
+    }
+
+    pub fn normalized_byte_pos(&self, offset: u32) -> BytePos {
+        let iff = match self.normalized_pos.binary_search_by(|np| (np.pos.0 + np.diff).cmp(&(self.start_pos.0 + offset))) {
+            Ok(i) => self.normalized_pos[i].diff,
+            Err(0) => 0,
+            Err(i) => self.normalized_pos[i - 1].diff,
+        };
+
+        BytePos::from_u32(self.start_pos.0 + offset - diff)
+    }
+
+    fn bytepos_to_file_charpos(&self, bpos: RelativeBytePos) -> CharPos {
+        let mut total_extra_bytes = 0;
+        for mbc in self.multibyte_chars.iter() {
+            debug!("{}-byte char at {:?}", mbc.bytes, mbc.pos);
+            if mbc.pos < bpos {
+                // Every character is at least one byte, so we only
+                // count the actual extra bytes.
+                total_extra_bytes += mbc.bytes as u32 - 1;
+                // We should never see a byte position in the middle of a
+                // character.
+                assert!(bpos.to_u32() >= mbc.pos.to_u32() + mbc.bytes as u32);
+            } else {
+                break;
+            }
+        }
+
+        assert!(total_extra_bytes <= bpos.to_u32());
+        CharPos(bpos.to_usize() - total_extra_bytes as usize)
+    }
+
+    fn lookup_file_pos(&self, pos: RelativeBytePos) -> (usize, CharPos) {
+        let chpos = self.bytepos_to_file_charpos(pos);
+        match self.lookup_line(pos) {
+            Some(a) => {
+                let line = a + 1; // Line numbers start at 1
+                let linebpos = self.lines()[a];
+                let linechpos = self.bytepos_to_file_charpos(linebpos);
+                let col = chpos - linechpos;
+                debug!("byte pos {:?} is on the line at byte pos {:?}", pos, linebpos);
+                debug!("char pos {:?} is on the line at char pos {:?}", chpos, linechpos);
+                debug!("byte is on line: {}", line);
+                assert!(chpos >= linechpos);
+                (line, col)
+            }
+            None => (0, chpos),
+        }
+    }
+
+    pub fn lookup_file_pos_with_col_display(&self, pos: BytePos) -> (usize, CharPos, usize) {
+        let pos = self.relative_position(pos);
+        let (line, col_or_chpos) = self.lookup_file_pos(pos);
+        if line > 0 {
+            let Some(code) = self.get_line(line - 1) else {
+                // If we don't have the code available, it is ok as a fallback to return the bytepos
+                // instead of the "display" column, which is only used to properly show underlines
+                // in the terminal.
+                // FIXME: we'll want better handling of this in the future for the sake of tools
+                // that want to use the display col instead of byte offsets to modify Rust code, but
+                // that is a problem for another day, the previous code was already incorrect for
+                // both displaying *and* third party tools using the json output naïvely.
+                tracing::info!("couldn't find line {line} {:?}", self.name);
+                return (line, col_or_chpos, col_or_chpos.0);
+            };
+            let display_col = code.chars().take(col_or_chpos.0).map(|ch| char_width(ch)).sum();
+            (line, col_or_chpos, display_col)
+        } else {
+            // This is never meant to happen?
+            (0, col_or_chpos, col_or_chpos.0)
+        }
+    }
+}
+
+pub fn char_width(ch: char) -> usize {
+    match ch {
+        '\t' => 4,
+        '\u{0000}' | '\u{0001}' | '\u{0002}' | '\u{0003}' | '\u{0004}' | '\u{0005}'
+        | '\u{0006}' | '\u{0007}' | '\u{0008}' | '\u{000B}' | '\u{000C}' | '\u{000D}'
+        | '\u{000E}' | '\u{000F}' | '\u{0010}' | '\u{0011}' | '\u{0012}' | '\u{0013}'
+        | '\u{0014}' | '\u{0015}' | '\u{0016}' | '\u{0017}' | '\u{0018}' | '\u{0019}'
+        | '\u{001A}' | '\u{001B}' | '\u{001C}' | '\u{001D}' | '\u{001E}' | '\u{001F}'
+        | '\u{007F}' | '\u{202A}' | '\u{202B}' | '\u{202D}' | '\u{202E}' | '\u{2066}'
+        | '\u{2067}' | '\u{2068}' | '\u{202C}' | '\u{2069}' => 1,
+        _ => unicode_width::UnicodeWidthChar::width(ch).unwrap_or(1),
+    }
+}
+
+pub fn str_width(s: &str) -> usize {
+    s.chars().map(char_width).sum()
+}
+
+fn normalize_src(src: &mut String) -> Vec<NormalizedPos> {
+    let mut normalized_pos = vec![];
+    remove_bom(src, &mut normalized_pos);
+    normalize_newlines(src, &mut normalized_pos);
+    normalized_pos
+}
+
+fn remove_bom(src: &mut String, normalized_pos: &mut Vec<NormalizedPos>) {
+    if src.starts_with('\u{feff}') {
+        src.drain(..3);
+        normalized_pos.push(NormalizedPos { pos: RelativeBytePos(0), diff: 3});
+    }
+}
+
+fn normalize_newlines(src: &mut String, normalized_pos: &mut Vec<NormalizedPos>) {
+    if !src.as_bytes().contains(&b'\r') {
+        return;
+    }
+
+    let mut buf = std::mem::replace(src, String::new()).into_bytes();
+    let mut gap_len = 0;
+    let mut tail = buf.as_mut_slice();
+    let mut cursor = 0;
+    let original_gap = normalized_pos.last().map_or(0, |l| l.diff);
+    loop {
+        let idx = match find_crlf(&tail[gap_len..]) {
+            None => tail.len(),
+            Some(idx) => idx + gap_len,
+        };
+        tail.copy_within(gap_len..idx, 0);
+        tail = &mut tail[idx - gap_len..];
+        if tail.len() == gap_len {
+            break;
+        }
+        cursor += idx - gap_len;
+        gap_len += 1;
+        normalized_pos.push(NormalizedPos {
+            pos: RelativeBytePos::from_usize(cursor + 1),
+            diff: original_gap + gap_len as u32,
+        });
+    }
+
+    let new_len = buf.len() - gap_len;
+    unsafe {
+        buf.set_len(new_len);
+        *src = String::from_utf8_unchecked(buf);
+    }
+
+    fn find_crlf(src: &[u8]) -> Option<usize> {
+        let mut search_idx = 0;
+        while let Some(idx) = find_cr(&src[search_idx..]) {
+            if src[search_idx..].get(idx + 1) != Some(&b'\n') {
+                search_idx += idx + 1;
+                continue;
+            }
+            return Some(search_idx + idx);
+        }
+        None
+    }
+
+    fn find_cr(src: &[u8]) -> Option<usize> {
+        src.iter().position(|&b| b == b'\r')
+    }
+}
+
+pub trait Pos {
+    fn from_usize(n: usize) -> Self;
+    fn to_usize(&self) -> usize;
+    fn from_u32(n: u32) -> Self;
+    fn to_u32(&self) -> u32;
+}
+
+macro_rules! impl_pos {
+    (
+        $(
+            $(#[$attr:meta])*
+            $vis:vis struct $ident:ident($inner_vis:vis $inner_ty:ty);
+        )*
+    ) => {
+        $(
+            $(#[$attr])*
+            $vis struct $ident($inner_vis $inner_ty);
+
+            impl Pos for $ident {
+                #[inline(always)]
+                fn from_usize(n: usize) -> $ident {
+                    $ident(n as $inner_ty)
+                }
+
+                #[inline(always)]
+                fn to_usize(&self) -> usize {
+                    self.0 as usize
+                }
+
+                #[inline(always)]
+                fn from_u32(n: u32) -> $ident {
+                    $ident(n as $inner_ty)
+                }
+
+                #[inline(always)]
+                fn to_u32(&self) -> u32 {
+                    self.0 as u32
+                }
+            }
+
+            impl Add for $ident {
+                type Output = $ident;
+
+                #[inline(always)]
+                fn add(self, rhs: $ident) -> $ident {
+                    $ident(self.0 + rhs.0)
+                }
+            }
+
+            impl Sub for $ident {
+                type Output = $ident;
+
+                #[inline(always)]
+                fn sub(self, rhs: $ident) -> $ident {
+                    $ident(self.0 - rhs.0)
+                }
+            }
+        )*
+    };
+}
+
+impl_pos! {
+    #[derive(Clone, Copy, PartialEq, Eq, Hash, PartialOrd, Ord, Debug)]
+    pub struct BytePos(pub u32);
+
+    #[derive(Clone, Copy, PartialEq, Eq, Hash, PartialOrd, Ord, Debug)]
+    pub struct RelativeBytePos(pub u32);
+
+    #[derive(Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Debug)]
+    pub struct CharPos(pub usize);
+}
+
+impl<S: Encoder> Encodable<S> for BytePos {
+    fn encode(&self, s: &mut S) {
+        s.emit_u32(self.0);
+    }
+}
+
+impl<D: Decoder> Decodable<D> for BytePos {
+    fn decode(d: &mut D) -> BytePos {
+        BytePos(d.read_u32())
+    }
+}
+
+impl<H: HashStableContext> HashStable<H> for RelativeBytePos {
+    fn hash_stable(&self, hcx: &mut H, hasher: &mut StableHasher) {
+        self.0.hash_stable(hcx, hasher);
+    }
+}
+
+impl<S: Encoder> Encodable<S> for RelativeBytePos {
+    fn encode(&self, s: &mut S) {
+        s.emit_u32(self.0);
+    }
+}
+
+impl<D: Decoder> Decodable<D> for RelativeBytePos {
+    fn decode(d: &mut D) -> RelativeBytePos {
+        RelativeBytePos(d.read_u32())
+    }
+}
+
+#[derive(Debug, Clone)]
+pub struct Loc {
+    pub file: Arc<SourceFile>,
+    pub line: usize,
+    pub col: CharPos,
+    pub col_display: usize,
+}
+
+#[derive(Debug)]
+pub struct SourceFileAndLine {
+    pub sf: Arc<SourceFile>,
+    pub line: usize,
+}
+
+#[derive(Debug)]
+pub struct SourceFileAndBytePos {
+    pub sf: Arc<SourceFile>,
+    pub pos: BytePos,
+}
+
+#[derive(Copy, Clone, Debug, PartialEq, Eq)]
+pub struct LineInfo {
+    pub line_index: usize,
+    pub start_col: CharPos,
+    pub end_col: CharPos,
+}
+
+pub struct FileLines {
+    pub file: Arc<SourceFile>,
+    pub lines: Vec<LineInfo>,
+}
+
+pub static SPAN_TRACK: AtomicRef<fn(LocalDefId)> = AtomicRef::new(&((|_| {}) as fn(_)));
+
+pub type FileLinesResult = Result<FileLines, SpanLinesError>;
+
+#[derive(Clone, PartialEq, Eq, Debug)]
+pub enum SpanLinesError {
+    DistinctSources(Box<DistinctSources>),
+}
+
+#[derive(Clone, PartialEq, Eq, Debug)]
+pub enum SpanSnippetError {
+    IllFormedSpan(Span),
+    DistinctSources(Box<DistinctSources>),
+    MalformedForSourcemap(MalformedSourceMapPositions),
+    SourceNotAvailable { filename: FileName},
+}
+
+#[derive(Clone, PartialEq, Eq, Debug)]
+pub struct DistinctSources {
+    pub begin: (FileName, BytePos),
+    pub end: (FileName, BytePos),
+}
+
+#[derive(Clone, PartialEq, Eq, Debug)]
+pub struct MalformedSourceMapPositions {
+    pub name: FileName,
+    pub source_len: usize,
+    pub begin_pos: BytePos,
+    pub end_pos: BytePos,
+}
+
+#[derive(Copy, Clone, PartialEq, Eq, Debug)]
+pub struct InnerSpan {
+    pub start: usize,
+    pub end: usize,
+}
+
+impl InnerSpan {
+    pub fn new(start: usize, end: usize) -> InnerSpan {
+        InnerSpan { start, end }
+    }
+}
+
+pub trait HashStableContext {
+    fn def_path_hash(&self, def_id: DefId) -> DefPathHash;
+    fn hash_spans(&self) -> bool;
+    /// Accesses `sess.opts.unstable_opts.incremental_ignore_spans` since
+    /// we don't have easy access to a `Session`
+    fn unstable_opts_incremental_ignore_spans(&self) -> bool;
+    fn def_span(&self, def_id: LocalDefId) -> Span;
+    fn span_data_to_lines_and_cols(
+        &mut self,
+        span: &SpanData,
+    ) -> Option<(Arc<SourceFile>, usize, BytePos, usize, BytePos)>;
+    fn hashing_controls(&self) -> HashingControls;
+}
+
+impl<CTX> HashStable<CTX> for Span
+where 
+    CTX: HashStableContext,
+    {
+        fn hash_stable(&self, ctx: &mut CTX, hasher: &mut StableHasher) {
+            const TAG_VALID_SPAN: u8 = 0;
+            const TAG_INVALID_SPAN: u8 = 1;
+            const TAG_RELATIVE_SPAN: u8 = 2;
+
+            if !ctx.hash_spans() {
+                return;
+            }
+
+            let span = self.data_untracked();
+            span.ctx.hash_stable(ctx, hasher);
+            span.parent.hash_stable(ctx, hasher);
+
+            if span.is_dummy() {
+                Hash::hash(&TAG_INVALID_SPAN, hasher);
+                return;
+            }
+
+            if let Some(parent) = span.parent {
+                let def_span = ctx.def_span(parent).data_untracked();
+                if def_span.contains(span) {
+                                  Hash::hash(&TAG_RELATIVE_SPAN, hasher);
+                (span.lo - def_span.lo).to_u32().hash_stable(ctx, hasher);
+                (span.hi - def_span.lo).to_u32().hash_stable(ctx, hasher);
+                return;
+                }
+            }
+
+                    let Some((file, line_lo, col_lo, line_hi, col_hi)) = ctx.span_data_to_lines_and_cols(&span)
+        else {
+            Hash::hash(&TAG_INVALID_SPAN, hasher);
+            return;
+        };
+
+        Hash::hash(&TAG_VALID_SPAN, hasher);
+        Hash::hash(&file.stable_id, hasher);
+
+                let col_lo_trunc = (col_lo.0 as u64) & 0xFF;
+        let line_lo_trunc = ((line_lo as u64) & 0xFF_FF_FF) << 8;
+        let col_hi_trunc = (col_hi.0 as u64) & 0xFF << 32;
+        let line_hi_trunc = ((line_hi as u64) & 0xFF_FF_FF) << 40;
+        let col_line = col_lo_trunc | line_lo_trunc | col_hi_trunc | line_hi_trunc;
+        let len = (span.hi - span.lo).0;
+        Hash::hash(&col_line, hasher);
+        Hash::hash(&len, hasher);
+        }
+    }
+
+#[derive(Clone, Copy, Debug, Hash, PartialEq, Eq, PartialOrd, Ord)]
+#[derive(HashStable_Generic)]
+pub struct ErrorGuaranteed(());
+
+impl ErrorGuaranteed {
+    pub fn raise_fatal(self) -> ! {
+        FatalError.raise()
+    }
+}
+
+impl<E: Encoder> Encodable<E> for ErrorGuaranteed {
+    #[inline]
+    fn encode(&self, _e: &mut e) {
+        panic!(
+            "Should never serialize an `ErrorGuaranteed` because Terebinth \
+            does not write metadata for incremental caches in the case that an \
+            error or errors occurred."
+        )
+    }
+}
+
+impl<D: Decoder> Decodable<D> for ErrorGuaranteed {
+    #[inline]
+    fn decode(_d: &mut D) -> ErrorGuaranteed {
+        panic!(
+            "`ErrorGuaranteed` should never have been serialized to metadata or incremental caches."
+        )
     }
 }

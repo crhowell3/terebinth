@@ -18,4 +18,10 @@ memchr = "2.7.4"
 scoped-tls = "1.0.1"
 smallvec = { version = "1.14.0", features = ["union", "may_dangle"]}
 termion = "4.0.4"
+tracing = "0.1"
 unicode-xid = "0.2.6"
+
+[dependencies.unicode-properties]
+version = "0.1.0"
+default-features = false
+features = ["emoji"]
