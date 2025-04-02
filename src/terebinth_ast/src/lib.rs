@@ -12,6 +12,7 @@ pub mod util {
 pub mod ast;
 pub mod entry;
 pub mod expand;
+pub mod ir;
 pub mod mut_visit;
 pub mod node_id;
 pub mod token;

@@ -7,9 +7,8 @@ edition = "2024"
 bitflags = "2.4.1"
 literal-escaper = { path = "../../library/literal-escaper" }
 memchr = "2.7.4"
-terebinth_ast_ir = { path = "../terebinth_ast_ir" }
 terebinth_data_structures = { path = "../terebinth_data_structures" }
-terebinth_index = { path = "../terebinth_index" }
+#terebinth_index = { path = "../terebinth_index" }
 terebinth_lexer = { path = "../terebinth_lexer" }
 terebinth_macros = { path = "../terebinth_macros" }
 terebinth_serialize = { path = "../terebinth_serialize" }

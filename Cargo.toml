@@ -11,18 +11,15 @@ rust-version = "1.85"
 
 [dependencies]
 anyhow = "1.0.97"
-bitflags = "2.4.1"
 clap = { version = "4.5.31", features = ["derive"] }
-derive-where = "1.2.7"
 ena = "0.14.3"
 log = "0.4.21"
-memchr = "2.7.4"
-scoped-tls = "1.0.1"
-smallvec = { version = "1.14.0", features = ["union", "may_dangle"]}
+terebinth_arena_allocator = { path = "./src/terebinth_arena_allocator" }
+terebinth_ast = { path = "./src/terebinth_ast" }
+terebinth_data_structures = { path = "./src/terebinth_data_structures" }
+terebinth_lexer = { path = "./src/terebinth_lexer" }
 terebinth_macros = { path = "./src/terebinth_macros" }
 termion = "4.0.4"
-tracing = "0.1"
-unicode-xid = "0.2.6"
 
 [dependencies.unicode-properties]
 version = "0.1.0"

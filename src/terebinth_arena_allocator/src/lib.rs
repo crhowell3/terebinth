@@ -9,6 +9,12 @@
 #![allow(internal_features)]
 #![cfg_attr(test, feature(test))]
 #![deny(unsafe_op_in_unsafe_fn)]
+#![feature(core_intrinsics)]
+#![feature(decl_macro)]
+#![feature(dropck_eyepatch)]
+#![feature(maybe_uninit_slice)]
+#![feature(rustc_attrs)]
+#![feature(rustdoc_internals)]
 
 use std::alloc::Layout;
 use std::cell::{Cell, RefCell};
@@ -63,7 +69,7 @@ impl<T> ArenaChunk<T> {
     #[inline]
     fn end(&mut self) -> *mut T {
         unsafe {
-            if size_of::<T> == 0 {
+            if size_of::<T>() == 0 {
                 ptr::without_provenance_mut(!0)
             } else {
                 self.start().add(self.storage.len())

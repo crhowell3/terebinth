@@ -4,9 +4,9 @@ use std::marker::PhantomData;
 use std::ops::Range;
 use std::path::{Path, PathBuf};
 
-use super::int_overflow::DebugStrictAdd;
-use super::leb128;
-use super::serialize::{Decodable, Decoder, Encodable, Encoder};
+use crate::int_overflow::DebugStrictAdd;
+use crate::leb128;
+use crate::serialize::{Decodable, Decoder, Encodable, Encoder};
 
 pub type FileEncodeResult = Result<usize, (PathBuf, io::Error)>;
 
@@ -27,6 +27,12 @@ pub struct FileEncoder {
 
 impl FileEncoder {
     pub fn new<P: AsRef<Path>>(path: P) -> io::Result<Self> {
+        let file = File::options()
+            .read(true)
+            .write(true)
+            .create(true)
+            .truncate(true)
+            .open(&path)?;
         Ok(FileEncoder {
             buf: vec![0u8; BUF_SIZE].into_boxed_slice().try_into().unwrap(),
             path: path.as_ref().into(),

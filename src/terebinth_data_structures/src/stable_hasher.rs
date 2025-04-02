@@ -3,6 +3,12 @@ use std::marker::PhantomData;
 use std::mem;
 use std::num::NonZero;
 
+pub use rustc_stable_hash::{
+    FromStableHash, SipHasher128Hash as StableHasherHash, StableSipHasher128 as StableHasher,
+};
+use smallvec::SmallVec;
+use terebinth_hashes::{Hash64, Hash128};
+
 pub trait HashStable<CTX> {
     fn hash_stable(&self, hcx: &mut CTX, hasher: &mut StableHasher);
 }

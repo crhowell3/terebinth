@@ -1,0 +1,14 @@
+[package]
+name = "terebinth_lexer"
+version = "0.0.0"
+edition = "2024"
+
+[dependencies]
+memchr = "2.7.4"
+unicode-xid = "0.2.0"
+literal-escaper = { path = "../../library/literal-escaper" }
+
+[dependencies.unicode-properties]
+version = "0.1.0"
+default-features = false
+features = ["emoji"]

@@ -9,6 +9,7 @@ use std::rc::Rc;
 use std::sync::Arc;
 
 use smallvec::{Array, SmallVec};
+use terebinth_hashes::{Hash64, Hash128};
 use thin_vec::ThinVec;
 
 const STR_SENTINEL: u8 = 0xC1;
