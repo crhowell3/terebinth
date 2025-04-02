@@ -1,6 +1,8 @@
 use std::ops::Range;
 use std::str::Chars;
 
+use Mode::*;
+
 #[derive(Debug, PartialEq, Eq)]
 pub enum EscapeError {
     /// Expected 1 char, but 0 were found.

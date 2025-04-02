@@ -1,5 +1,15 @@
 //! Terebinth abstract syntax tree (AST)
 
+#![allow(internal_features)]
+#![feature(associated_type_defaults)]
+#![feature(box_patterns)]
+#![feature(if_let_guard)]
+#![feature(let_chains)]
+#![feature(negative_impls)]
+#![feature(never_type)]
+#![feature(rustdoc_internals)]
+#![feature(stmt_expr_attributes)]
+
 pub mod util {
     pub mod case;
     pub mod classify;
@@ -10,6 +20,7 @@ pub mod util {
 }
 
 pub mod ast;
+pub mod attr;
 pub mod entry;
 pub mod expand;
 pub mod ir;
