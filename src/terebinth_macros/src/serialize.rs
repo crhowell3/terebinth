@@ -15,7 +15,9 @@ pub(super) fn type_decodable_derive(
         s.add_impl_generic(parse_quote! { 'tcx });
     }
     let decoder_ty = quote! { __D };
-    s.add_impl_generic(parse_quote! { #decoder_ty: ::rustc_middle::ty::codec::TyDecoder<'tcx> });
+    s.add_impl_generic(
+        parse_quote! { #decoder_ty: ::terebinth_middle::ty::codec::TyDecoder<'tcx> },
+    );
     s.add_bounds(synstructure::AddBounds::Fields);
     s.underscore_const(true);
 
@@ -43,7 +45,7 @@ pub(super) fn meta_decodable_derive(
 
 pub(super) fn decodable_derive(mut s: synstructure::Structure<'_>) -> proc_macro2::TokenStream {
     let decoder_ty = quote! { __D };
-    s.add_impl_generic(parse_quote! { #decoder_ty: ::rustc_span::SpanDecoder });
+    s.add_impl_generic(parse_quote! { #decoder_ty: ::terebinth_span::SpanDecoder });
     s.add_bounds(synstructure::AddBounds::Generics);
     s.underscore_const(true);
 
@@ -54,7 +56,7 @@ pub(super) fn decodable_nocontext_derive(
     mut s: synstructure::Structure<'_>,
 ) -> proc_macro2::TokenStream {
     let decoder_ty = quote! { __D };
-    s.add_impl_generic(parse_quote! { #decoder_ty: ::rustc_serialize::Decoder });
+    s.add_impl_generic(parse_quote! { #decoder_ty: ::terebinth_serialize::Decoder });
     s.add_bounds(synstructure::AddBounds::Fields);
     s.underscore_const(true);
 
@@ -93,11 +95,11 @@ fn decodable_body(
             );
             let tag = if variants.len() < u8::MAX as usize {
                 quote! {
-                    ::rustc_serialize::Decoder::read_u8(__decoder) as usize
+                    ::terebinth_serialize::Decoder::read_u8(__decoder) as usize
                 }
             } else {
                 quote! {
-                    ::rustc_serialize::Decoder::read_usize(__decoder)
+                    ::terebinth_serialize::Decoder::read_usize(__decoder)
                 }
             };
             quote! {
@@ -111,7 +113,7 @@ fn decodable_body(
     s.underscore_const(true);
 
     s.bound_impl(
-        quote!(::rustc_serialize::Decodable<#decoder_ty>),
+        quote!(::terebinth_serialize::Decodable<#decoder_ty>),
         quote! {
             fn decode(__decoder: &mut #decoder_ty) -> Self {
                 #decode_body
@@ -127,9 +129,9 @@ fn decode_field(field: &syn::Field) -> proc_macro2::TokenStream {
         .map_or(field.ty.span(), |ident| ident.span());
 
     let decode_inner_method = if let syn::Type::Reference(_) = field.ty {
-        quote! { ::rustc_middle::ty::codec::RefDecodable::decode }
+        quote! { ::terebinth_middle::ty::codec::RefDecodable::decode }
     } else {
-        quote! { ::rustc_serialize::Decodable::decode }
+        quote! { ::terebinth_serialize::Decodable::decode }
     };
     let __decoder = quote! { __decoder };
     // Use the span of the field for the method call, so
@@ -149,7 +151,9 @@ pub(super) fn type_encodable_derive(
     {
         s.add_impl_generic(parse_quote! { 'tcx });
     }
-    s.add_impl_generic(parse_quote! { #encoder_ty: ::rustc_middle::ty::codec::TyEncoder<'tcx> });
+    s.add_impl_generic(
+        parse_quote! { #encoder_ty: ::terebinth_middle::ty::codec::TyEncoder<'tcx> },
+    );
     s.add_bounds(synstructure::AddBounds::Fields);
     s.underscore_const(true);
 
@@ -177,7 +181,7 @@ pub(super) fn meta_encodable_derive(
 
 pub(super) fn encodable_derive(mut s: synstructure::Structure<'_>) -> proc_macro2::TokenStream {
     let encoder_ty = quote! { __E };
-    s.add_impl_generic(parse_quote! { #encoder_ty: ::rustc_span::SpanEncoder });
+    s.add_impl_generic(parse_quote! { #encoder_ty: ::terebinth_span::SpanEncoder });
     s.add_bounds(synstructure::AddBounds::Generics);
     s.underscore_const(true);
 
@@ -188,7 +192,7 @@ pub(super) fn encodable_nocontext_derive(
     mut s: synstructure::Structure<'_>,
 ) -> proc_macro2::TokenStream {
     let encoder_ty = quote! { __E };
-    s.add_impl_generic(parse_quote! { #encoder_ty: ::rustc_serialize::Encoder });
+    s.add_impl_generic(parse_quote! { #encoder_ty: ::terebinth_serialize::Encoder });
     s.add_bounds(synstructure::AddBounds::Fields);
     s.underscore_const(true);
 
@@ -227,7 +231,7 @@ fn encodable_body(
                     .map(|binding| {
                         let bind_ident = &binding.binding;
                         let result = quote! {
-                            ::rustc_serialize::Encodable::<#encoder_ty>::encode(
+                            ::terebinth_serialize::Encodable::<#encoder_ty>::encode(
                                 #bind_ident,
                                 __encoder,
                             );
@@ -255,14 +259,14 @@ fn encodable_body(
                         let disc = match *self {
                             #encode_inner
                         };
-                        ::rustc_serialize::Encoder::emit_u8(__encoder, disc as u8);
+                        ::terebinth_serialize::Encoder::emit_u8(__encoder, disc as u8);
                     }
                 } else {
                     quote! {
                         let disc = match *self {
                             #encode_inner
                         };
-                        ::rustc_serialize::Encoder::emit_usize(__encoder, disc);
+                        ::terebinth_serialize::Encoder::emit_usize(__encoder, disc);
                     }
                 }
             };
@@ -275,7 +279,7 @@ fn encodable_body(
                     .map(|binding| {
                         let bind_ident = &binding.binding;
                         let result = quote! {
-                            ::rustc_serialize::Encodable::<#encoder_ty>::encode(
+                            ::terebinth_serialize::Encodable::<#encoder_ty>::encode(
                                 #bind_ident,
                                 __encoder,
                             );
@@ -302,7 +306,7 @@ fn encodable_body(
     };
 
     s.bound_impl(
-        quote!(::rustc_serialize::Encodable<#encoder_ty>),
+        quote!(::terebinth_serialize::Encodable<#encoder_ty>),
         quote! {
             fn encode(
                 &self,

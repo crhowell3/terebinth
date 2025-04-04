@@ -101,14 +101,14 @@ fn hash_stable_derive_with_mode(
 
     let context: syn::Type = match mode {
         HashStableMode::Normal => {
-            parse_quote!(::rustc_query_system::ich::StableHashingContext<'__ctx>)
+            parse_quote!(::terebinth_query_system::ich::StableHashingContext<'__ctx>)
         }
         HashStableMode::Generic | HashStableMode::NoContext => parse_quote!(__CTX),
     };
 
     s.bound_impl(
         quote!(
-            ::rustc_data_structures::stable_hasher::HashStable<
+            ::terebinth_data_structures::stable_hasher::HashStable<
                 #context
             >
         ),
@@ -117,7 +117,7 @@ fn hash_stable_derive_with_mode(
             fn hash_stable(
                 &self,
                 __hcx: &mut #context,
-                __hasher: &mut ::rustc_data_structures::stable_hasher::StableHasher) {
+                __hasher: &mut ::terebinth_data_structures::stable_hasher::StableHasher) {
                 #discriminant
                 match *self { #body }
             }

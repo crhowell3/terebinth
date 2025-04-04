@@ -2,12 +2,18 @@
 //! that a type can be used to look up a value, and a value can be used to look
 //! up a type.
 
-use std::hash::{Hash, Marker};
+use std::hash::{Hash, Hasher};
 use std::{fmt, str};
 
-use crate::arena::DroplessArena;
+use terebinth_arena_allocator::DroplessArena;
+use terebinth_data_structures::fx::FxIndexSet;
+use terebinth_data_structures::stable_hasher::{
+    HashStable, StableCompare, StableHasher, ToStableHashKey,
+};
+use terebinth_data_structures::sync::Lock;
+use terebinth_macros::{Decodable, Encodable, HashStable_Generic, symbols};
 
-use crate::{Edition, Span, with_session_globals};
+use crate::{DUMMY_SP, Edition, Span, with_session_globals};
 
 symbols! {
     Keywords {

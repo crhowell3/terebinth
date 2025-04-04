@@ -5,10 +5,10 @@ use std::ops::{BitAnd, BitAndAssign, BitOrAssign, Bound, Not, Range, RangeBounds
 use std::rc::Rc;
 use std::{fmt, iter, slice};
 
-use smallvec::{smallvec, SmallVec};
+use Chunk::*;
+use smallvec::{SmallVec, smallvec};
 #[cfg(feature = "nightly")]
 use terebinth_macros::{Decodable_NoContext, Encodable_NoContext};
-use Chunk::*;
 
 use crate::{Idx, IndexVec};
 
@@ -542,11 +542,7 @@ impl<T: Idx> ChunkedBitSet<T> {
             // the final one.
             let final_chunk_domain_size = {
                 let n = domain_size % CHUNK_BITS;
-                if n == 0 {
-                    CHUNK_BITS
-                } else {
-                    n
-                }
+                if n == 0 { CHUNK_BITS } else { n }
             };
             let mut chunks =
                 vec![Chunk::new(CHUNK_BITS, is_empty); num_chunks(domain_size)].into_boxed_slice();

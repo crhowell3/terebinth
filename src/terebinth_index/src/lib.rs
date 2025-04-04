@@ -17,7 +17,7 @@ pub use terebinth_index_macros::newtype_index;
 pub use vec::IndexVec;
 
 #[macro_export]
-#[cfg(not(feature = "rustc_randomized_layouts"))]
+#[cfg(not(feature = "terebinth_randomized_layouts"))]
 macro_rules! static_assert_size {
     ($ty:ty, $size:expr) => {
         const _: [(); $size] = [(); ::std::mem::size_of::<$ty>()];
@@ -25,7 +25,7 @@ macro_rules! static_assert_size {
 }
 
 #[macro_export]
-#[cfg(feature = "rustc_randomized_layouts")]
+#[cfg(feature = "terebinth_randomized_layouts")]
 macro_rules! static_assert_size {
     ($ty:ty, $size:expr) => {
         const _: (usize, usize) = ($size, ::std::mem::size_of::<$ty>());

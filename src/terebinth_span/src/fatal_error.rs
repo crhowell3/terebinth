@@ -2,6 +2,8 @@
 #[must_use]
 pub struct FatalError;
 
+pub use terebinth_data_structures::FatalErrorMarker;
+
 impl !Send for FatalError {}
 
 impl FatalError {

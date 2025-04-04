@@ -1,6 +1,8 @@
 use std::fmt;
 use std::str::FromStr;
 
+use terebinth_macros::{Decodable, Encodable, HashStable_Generic};
+
 #[derive(
     Clone, Copy, Hash, PartialEq, PartialOrd, Debug, Encodable, Decodable, Eq, HashStable_Generic,
 )]

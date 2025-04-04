@@ -13,6 +13,7 @@ indexmap = "2.4.0"
 rustc-stable-hash = { version = "0.1.0", features = ["nightly"] }
 terebinth_arena_allocator = { path = "../terebinth_arena_allocator" }
 terebinth_hashes = { path = "../terebinth_hashes" }
+terebinth_index = { path = "../terebinth_index" }
 terebinth_macros = { path = "../terebinth_macros" }
 terebinth_serialize = { path = "../terebinth_serialize" }
 smallvec = { version = "1.8.1", features = ["const_generics", "union", "may_dangle"] }

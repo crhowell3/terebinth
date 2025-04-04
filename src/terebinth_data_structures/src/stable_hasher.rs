@@ -3,6 +3,11 @@ use std::marker::PhantomData;
 use std::mem;
 use std::num::NonZero;
 
+use terebinth_index::{
+    Idx, IndexSlice, IndexVec,
+    bit_set::{self, DenseBitSet},
+};
+
 pub use rustc_stable_hash::{
     FromStableHash, SipHasher128Hash as StableHasherHash, StableSipHasher128 as StableHasher,
 };

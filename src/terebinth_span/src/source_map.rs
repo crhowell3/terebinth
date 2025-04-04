@@ -3,7 +3,7 @@ use std::{fs, path};
 
 use tracing::{debug, instrument, trace};
 
-use terebinth_macros::{Decodable, Encodable};
+use terebinth_macros::{Decodable, Encodable, HashStable_Generic};
 
 pub fn original_sp(sp: Span, enclosing_sp: Span) -> Span {
     let ctx = sp.ctx();

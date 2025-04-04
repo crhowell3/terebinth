@@ -19,9 +19,13 @@
 #![feature(rustdoc_internals)]
 #![feature(slice_as_chunks)]
 
+extern crate self as terebinth_span;
+
 use derive_where::derive_where;
-use crate::serialize::opaque::{FileEncoder, MemDecoder};
-use crate::serialize::{Decodable, Decoder, Encodable, Encoder};
+use terebinth_data_structures::{AtomicRef, outline};
+use terebinth_macros::{Decodable, Encodable, HashStable_Generic};
+use terebinth_serialize::opaque::{FileEncoder, MemDecoder};
+use terebinth_serialize::{Decodable, Decoder, Encodable, Encoder};
 use tracing::debug;
 
 mod caching_source_map_view;
@@ -29,10 +33,11 @@ pub mod source_map;
 use source_map::{SourceMap, SourceMapInputs};
 
 pub use self::caching_source_map_view::CachingSourceMapView;
-use fatal_error::FatalError;
+use crate::fatal_error::FatalError;
 
 pub mod edition;
 use edition::Edition;
+pub mod fatal_error;
 pub mod source_analysis;
 pub mod span_encoding;
 
@@ -40,8 +45,6 @@ pub mod symbol;
 use source_analysis::analyze_source_file;
 pub use span_encoding::{DUMMY_SP, Span};
 pub use symbol::{Ident, Symbol, kw, sym};
-
-use crate::ast::node_id;
 
 use std::borrow::Cow;
 use std::cmp::{self, Ordering};
@@ -53,6 +56,13 @@ use std::path::{Path, PathBuf};
 use std::str::FromStr;
 use std::sync::Arc;
 use std::{fmt, iter};
+
+use sha1::Sha1;
+use sha2::Sha256;
+use terebinth_data_structures::stable_hasher::{HashStable, StableHasher};
+use terebinth_data_structures::sync::{FreezeLock, FreezeWriteGuard, Lock};
+use terebinth_data_structures::unord::UnordMap;
+use terebinth_hashes::{Hash64, Hash128};
 
 pub struct SessionGlobals {
     symbol_interner: symbol::Interner,
@@ -1329,7 +1339,7 @@ impl SourceFile {
         if line_index == (lines.len() - 1) {
             self.absolute_position(lines[line_index])..self.end_position()
         } else {
-            self.absolute_position(lines[line_index])..self..self.absolute_position(lines[line_index + 1])
+            self.absolute_position(lines[line_index])..self.absolute_position(lines[line_index + 1])
         }
     }
 
@@ -1356,7 +1366,10 @@ impl SourceFile {
     }
 
     pub fn normalized_byte_pos(&self, offset: u32) -> BytePos {
-        let iff = match self.normalized_pos.binary_search_by(|np| (np.pos.0 + np.diff).cmp(&(self.start_pos.0 + offset))) {
+        let iff = match self
+            .normalized_pos
+            .binary_search_by(|np| (np.pos.0 + np.diff).cmp(&(self.start_pos.0 + offset)))
+        {
             Ok(i) => self.normalized_pos[i].diff,
             Err(0) => 0,
             Err(i) => self.normalized_pos[i - 1].diff,
@@ -1393,8 +1406,14 @@ impl SourceFile {
                 let linebpos = self.lines()[a];
                 let linechpos = self.bytepos_to_file_charpos(linebpos);
                 let col = chpos - linechpos;
-                debug!("byte pos {:?} is on the line at byte pos {:?}", pos, linebpos);
-                debug!("char pos {:?} is on the line at char pos {:?}", chpos, linechpos);
+                debug!(
+                    "byte pos {:?} is on the line at byte pos {:?}",
+                    pos, linebpos
+                );
+                debug!(
+                    "char pos {:?} is on the line at char pos {:?}",
+                    chpos, linechpos
+                );
                 debug!("byte is on line: {}", line);
                 assert!(chpos >= linechpos);
                 (line, col)
@@ -1418,7 +1437,11 @@ impl SourceFile {
                 tracing::info!("couldn't find line {line} {:?}", self.name);
                 return (line, col_or_chpos, col_or_chpos.0);
             };
-            let display_col = code.chars().take(col_or_chpos.0).map(|ch| char_width(ch)).sum();
+            let display_col = code
+                .chars()
+                .take(col_or_chpos.0)
+                .map(|ch| char_width(ch))
+                .sum();
             (line, col_or_chpos, display_col)
         } else {
             // This is never meant to happen?
@@ -1455,7 +1478,10 @@ fn normalize_src(src: &mut String) -> Vec<NormalizedPos> {
 fn remove_bom(src: &mut String, normalized_pos: &mut Vec<NormalizedPos>) {
     if src.starts_with('\u{feff}') {
         src.drain(..3);
-        normalized_pos.push(NormalizedPos { pos: RelativeBytePos(0), diff: 3});
+        normalized_pos.push(NormalizedPos {
+            pos: RelativeBytePos(0),
+            diff: 3,
+        });
     }
 }
 
@@ -1658,7 +1684,7 @@ pub enum SpanSnippetError {
     IllFormedSpan(Span),
     DistinctSources(Box<DistinctSources>),
     MalformedForSourcemap(MalformedSourceMapPositions),
-    SourceNotAvailable { filename: FileName},
+    SourceNotAvailable { filename: FileName },
 }
 
 #[derive(Clone, PartialEq, Eq, Debug)]
@@ -1702,38 +1728,38 @@ pub trait HashStableContext {
 }
 
 impl<CTX> HashStable<CTX> for Span
-where 
+where
     CTX: HashStableContext,
-    {
-        fn hash_stable(&self, ctx: &mut CTX, hasher: &mut StableHasher) {
-            const TAG_VALID_SPAN: u8 = 0;
-            const TAG_INVALID_SPAN: u8 = 1;
-            const TAG_RELATIVE_SPAN: u8 = 2;
+{
+    fn hash_stable(&self, ctx: &mut CTX, hasher: &mut StableHasher) {
+        const TAG_VALID_SPAN: u8 = 0;
+        const TAG_INVALID_SPAN: u8 = 1;
+        const TAG_RELATIVE_SPAN: u8 = 2;
 
-            if !ctx.hash_spans() {
-                return;
-            }
+        if !ctx.hash_spans() {
+            return;
+        }
 
-            let span = self.data_untracked();
-            span.ctx.hash_stable(ctx, hasher);
-            span.parent.hash_stable(ctx, hasher);
+        let span = self.data_untracked();
+        span.ctx.hash_stable(ctx, hasher);
+        span.parent.hash_stable(ctx, hasher);
 
-            if span.is_dummy() {
-                Hash::hash(&TAG_INVALID_SPAN, hasher);
-                return;
-            }
+        if span.is_dummy() {
+            Hash::hash(&TAG_INVALID_SPAN, hasher);
+            return;
+        }
 
-            if let Some(parent) = span.parent {
-                let def_span = ctx.def_span(parent).data_untracked();
-                if def_span.contains(span) {
-                                  Hash::hash(&TAG_RELATIVE_SPAN, hasher);
+        if let Some(parent) = span.parent {
+            let def_span = ctx.def_span(parent).data_untracked();
+            if def_span.contains(span) {
+                Hash::hash(&TAG_RELATIVE_SPAN, hasher);
                 (span.lo - def_span.lo).to_u32().hash_stable(ctx, hasher);
                 (span.hi - def_span.lo).to_u32().hash_stable(ctx, hasher);
                 return;
-                }
             }
+        }
 
-                    let Some((file, line_lo, col_lo, line_hi, col_hi)) = ctx.span_data_to_lines_and_cols(&span)
+        let Some((file, line_lo, col_lo, line_hi, col_hi)) = ctx.span_data_to_lines_and_cols(&span)
         else {
             Hash::hash(&TAG_INVALID_SPAN, hasher);
             return;
@@ -1742,7 +1768,7 @@ where
         Hash::hash(&TAG_VALID_SPAN, hasher);
         Hash::hash(&file.stable_id, hasher);
 
-                let col_lo_trunc = (col_lo.0 as u64) & 0xFF;
+        let col_lo_trunc = (col_lo.0 as u64) & 0xFF;
         let line_lo_trunc = ((line_lo as u64) & 0xFF_FF_FF) << 8;
         let col_hi_trunc = (col_hi.0 as u64) & 0xFF << 32;
         let line_hi_trunc = ((line_hi as u64) & 0xFF_FF_FF) << 40;
@@ -1750,11 +1776,10 @@ where
         let len = (span.hi - span.lo).0;
         Hash::hash(&col_line, hasher);
         Hash::hash(&len, hasher);
-        }
     }
+}
 
-#[derive(Clone, Copy, Debug, Hash, PartialEq, Eq, PartialOrd, Ord)]
-#[derive(HashStable_Generic)]
+#[derive(Clone, Copy, Debug, Hash, PartialEq, Eq, PartialOrd, Ord, HashStable_Generic)]
 pub struct ErrorGuaranteed(());
 
 impl ErrorGuaranteed {
