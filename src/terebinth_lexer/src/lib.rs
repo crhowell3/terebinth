@@ -12,8 +12,8 @@ pub use unicode_xid::UNICODE_VERSION as UNICODE_XID_VERSION;
 
 use self::LiteralKind::*;
 use self::TokenKind::*;
-pub use crate::terebinth_lexer::cursor::Cursor;
-use crate::terebinth_lexer::cursor::EOF_CHAR;
+pub use crate::cursor::Cursor;
+use crate::cursor::EOF_CHAR;
 
 /// A Token in Terebinth is an identifier, keyword, operator, or symbol.
 /// The Token will contain token type information as well as its length.
@@ -458,7 +458,7 @@ impl Cursor<'_> {
     }
 
     fn double_quoted_string(&mut self) -> bool {
-        debug_assert!(self.prev() = '"');
+        debug_assert!(self.prev() == '"');
         while let Some(c) = self.bump() {
             match c {
                 '"' => {

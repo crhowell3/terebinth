@@ -817,7 +817,6 @@ pub struct Expr {
     pub id: NodeId,
     pub kind: ExprKind,
     pub span: Span,
-    pub attrs: AttrVec,
     pub tokens: Option<LazyAttrTokenStream>,
 }
 
@@ -1933,7 +1932,6 @@ impl Param {
             ),
         };
         Param {
-            attrs,
             pat: P(Pattern {
                 id: DUMMY_NODE_ID,
                 kind: PatternKind::Ident(BindingMode(ByRef::No, mutbl), eself_ident, None),

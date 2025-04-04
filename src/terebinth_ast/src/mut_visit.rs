@@ -1347,7 +1347,6 @@ pub fn walk_expr<T: MutVisitor>(
         kind,
         id,
         span,
-        attrs,
         tokens,
     }: &mut Expr,
 ) {
@@ -1682,7 +1681,7 @@ impl DummyAstNode for Item {
                 tokens: Default::default(),
             },
             ident: Ident::dummy(),
-            kind: ItemKind::ExternCrate(None),
+            kind: ItemKind(None),
             tokens: Default::default(),
         }
     }
@@ -1694,7 +1693,6 @@ impl DummyAstNode for Expr {
             id: DUMMY_NODE_ID,
             kind: ExprKind::Dummy,
             span: Default::default(),
-            attrs: Default::default(),
             tokens: Default::default(),
         }
     }

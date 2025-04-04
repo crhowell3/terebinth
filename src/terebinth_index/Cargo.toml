@@ -2,3 +2,17 @@
 name = "terebinth_index"
 version = "0.0.0"
 edition = "2024"
+
+[dependencies]
+terebinth_index_macros = { path = "../terebinth_index_macros" }
+terebinth_macros = { path = "../terebinth_macros" }
+terebinth_serialize = { path = "../terebinth_serialize", optional = true }
+smallvec = "1.8.1"
+
+[features]
+default = ["nightly"]
+nightly = [
+    "dep:rustc_serialize",
+    "dep:rustc_macros",
+    "rustc_index_macros/nightly",
+]
