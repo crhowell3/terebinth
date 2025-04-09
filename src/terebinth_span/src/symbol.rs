@@ -21,6 +21,7 @@ symbols! {
         Underscore: "_",
 
         // Terebinth keywords
+        As: "as",
         Break: "break",
         Const: "const",
         Continue: "continue",
@@ -131,7 +132,7 @@ impl fmt::Display for IdentPrinter {
 #[derive(Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
 pub struct Symbol(SymbolIndex);
 
-index::newtype_index! {
+terebinth_index::newtype_index! {
     #[orderable]
     struct SymbolIndex{}
 }
@@ -250,7 +251,6 @@ pub mod kw {
 
 pub mod sym {
     use super::Symbol;
-    pub use super::kw::MacroRules as macro_rules;
     #[doc(inline)]
     pub use super::sym_generated::*;
 

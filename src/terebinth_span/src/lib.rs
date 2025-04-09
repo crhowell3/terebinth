@@ -37,6 +37,7 @@ use crate::fatal_error::FatalError;
 
 pub mod edition;
 use edition::Edition;
+pub mod def_id;
 pub mod fatal_error;
 pub mod hygiene;
 pub mod source_analysis;

@@ -1,3 +1,10 @@
+use terebinth_data_structures::fx::FxIndexSet;
+use terebinth_serialize::int_overflow::DebugStrictAdd;
+
+use crate::def_id::{DefIndex, LocalDefId};
+use crate::hygiene::SyntaxContext;
+use crate::{BytePos, SPAN_TRACK, SpanData};
+
 #[derive(Clone, Copy, Eq, PartialEq, Hash)]
 pub struct Span {
     lo_or_index: u32,
@@ -239,7 +246,7 @@ impl Span {
     pub fn data(self) -> SpanData {
         let data = self.data_untracked();
         if let Some(parent) = data.parent {
-            (*SPAN_TRACE)(parent);
+            (*SPAN_TRACK)(parent);
         }
         data
     }
@@ -339,7 +346,7 @@ impl Span {
                     None => return self,
                     Some(parent) => {
                         let parent32 = parent.local_def_index.as_u32();
-                        if span.ctx == 0 && parent32 <= MAX_CTXT {
+                        if span.ctx == 0 && parent32 <= MAX_CTX {
                             return InlineParent::span(span.lo, span.len, parent32 as u16);
                         }
                     }
@@ -385,5 +392,5 @@ impl SpanInterner {
 
 #[inline]
 fn with_span_interner<T, F: FnOnce(&mut SpanInterner) -> T>(f: F) -> T {
-    with_session_globals(|session_globals| f(&mut session_globals.span_interner.lock()))
+    crate::with_session_globals(|session_globals| f(&mut session_globals.span_interner.lock()))
 }

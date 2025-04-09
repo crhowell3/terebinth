@@ -1369,7 +1369,6 @@ pub fn register_expn_id(
 
 /// Decode an expansion from the metadata of a foreign crate.
 pub fn decode_expn_id(
-    krate: CrateNum,
     index: u32,
     decode_data: impl FnOnce(ExpnId) -> (ExpnData, ExpnHash),
 ) -> ExpnId {

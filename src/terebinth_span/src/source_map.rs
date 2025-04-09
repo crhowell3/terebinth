@@ -3,7 +3,13 @@ use std::{fs, path};
 
 use tracing::{debug, instrument, trace};
 
-use terebinth_macros::{Decodable, Encodable, HashStable_Generic};
+use terebinth_data_structures::{
+    sync::{IntoDynSyncSend, MappedReadGuard, ReadGuard, RwLock},
+    unhash::UnhashMap,
+};
+use terebinth_macros::{Decodable, Encodable};
+
+use crate::*;
 
 pub fn original_sp(sp: Span, enclosing_sp: Span) -> Span {
     let ctx = sp.ctx();
@@ -280,7 +286,6 @@ impl SourceMap {
         checksum_hash: Option<SourceFileHash>,
         stable_id: StableSourceFileId,
         source_len: u32,
-        cnum: CrateNum,
         file_local_lines: FreezeLock<SourceFileLines>,
         multibyte_chars: Vec<MultiByteChar>,
         normalized_pos: Vec<NormalizedPos>,

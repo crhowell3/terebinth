@@ -24,14 +24,14 @@ impl Parse for Newtype {
         let mut consts = Vec::new();
         let mut encodable = false;
         let mut ord = false;
-        let mut gate_rustc_only = quote! {};
-        let mut gate_rustc_only_cfg = quote! { all() };
+        let mut gate_terebinth_only = quote! {};
+        let mut gate_terebinth_only_cfg = quote! { all() };
 
         attrs.retain(|attr| match attr.path().get_ident() {
             Some(ident) => match &*ident.to_string() {
-                "gate_rustc_only" => {
-                    gate_rustc_only = quote! { #[cfg(feature = "nightly")] };
-                    gate_rustc_only_cfg = quote! { feature = "nightly" };
+                "gate_terebinth_only" => {
+                    gate_terebinth_only = quote! { #[cfg(feature = "nightly")] };
+                    gate_terebinth_only_cfg = quote! { feature = "nightly" };
                     false
                 }
                 "encodable" => {
@@ -101,14 +101,14 @@ impl Parse for Newtype {
 
         let encodable_impls = if encodable {
             quote! {
-                #gate_rustc_only
-                impl<D: ::rustc_serialize::Decoder> ::rustc_serialize::Decodable<D> for #name {
+                #gate_terebinth_only
+                impl<D: ::terebinth_serialize::Decoder> ::terebinth_serialize::Decodable<D> for #name {
                     fn decode(d: &mut D) -> Self {
                         Self::from_u32(d.read_u32())
                     }
                 }
-                #gate_rustc_only
-                impl<E: ::rustc_serialize::Encoder> ::rustc_serialize::Encodable<E> for #name {
+                #gate_terebinth_only
+                impl<E: ::terebinth_serialize::Encoder> ::terebinth_serialize::Encodable<E> for #name {
                     fn encode(&self, e: &mut E) {
                         e.emit_u32(self.as_u32());
                     }
@@ -125,7 +125,7 @@ impl Parse for Newtype {
 
         let step = if ord {
             quote! {
-                #gate_rustc_only
+                #gate_terebinth_only
                 impl ::std::iter::Step for #name {
                     #[inline]
                     fn steps_between(start: &Self, end: &Self) -> (usize, Option<usize>) {
@@ -161,8 +161,8 @@ impl Parse for Newtype {
         Ok(Self(quote! {
             #(#attrs)*
             #[derive(Clone, Copy, PartialEq, Eq, Hash, #(#derive_paths),*)]
-            #[cfg_attr(#gate_rustc_only_cfg, rustc_layout_scalar_valid_range_end(#max))]
-            #[cfg_attr(#gate_rustc_only_cfg, rustc_pass_by_value)]
+            #[cfg_attr(#gate_terebinth_only_cfg, rustc_layout_scalar_valid_range_end(#max))]
+            #[cfg_attr(#gate_terebinth_only_cfg, rustc_pass_by_value)]
             #vis struct #name {
                 private_use_as_methods_instead: u32,
             }
@@ -263,7 +263,7 @@ impl Parse for Newtype {
                 }
             }
 
-            impl rustc_index::Idx for #name {
+            impl terebinth_index::Idx for #name {
                 #[inline]
                 fn new(value: usize) -> Self {
                     Self::from_usize(value)
