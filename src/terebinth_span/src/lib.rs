@@ -38,6 +38,7 @@ use crate::fatal_error::FatalError;
 pub mod edition;
 use edition::Edition;
 pub mod fatal_error;
+pub mod hygiene;
 pub mod source_analysis;
 pub mod span_encoding;
 

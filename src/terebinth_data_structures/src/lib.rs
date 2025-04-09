@@ -30,10 +30,25 @@ use std::fmt;
 
 pub use atomic_ref::AtomicRef;
 pub use ena::{snapshot_vec, undo_log, unify};
+pub use terebinth_index::static_assert_size;
 
+pub mod aligned;
 mod atomic_ref;
+pub mod fingerprint;
+pub mod flock;
 pub mod frozen;
+pub mod fx;
+pub mod intern;
+pub mod jobserver;
+pub mod marker;
+pub mod memmap;
+pub mod owned_slice;
+pub mod profiling;
 pub mod stable_hasher;
+pub mod sync;
+pub mod tagged_ptr;
+pub mod thin_vec;
+pub mod unhash;
 
 #[inline(never)]
 #[cold]
