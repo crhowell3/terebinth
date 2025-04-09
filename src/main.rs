@@ -1,19 +1,10 @@
-//     terebinth - lightweight programming language
-//     Copyright (C) 2024 Cameron Howell
-//
-//     Licensed under the MIT License
+//! The Terebinth compiler.
 
+use std::panic::{self, PanicHookInfo, catch_unwind};
 use std::path::PathBuf;
 
 use anyhow::Result;
 use clap::Parser;
-use compilation_unit::CompilationUnit;
-
-mod ast;
-mod compilation_unit;
-mod diagnostics;
-mod source;
-mod typings;
 
 #[derive(Parser, Debug)]
 #[clap(name = "terebinth")]
@@ -35,12 +26,33 @@ fn check_extension(file_path: &str) -> Result<PathBuf, String> {
     Ok(file_path)
 }
 
-fn main() -> Result<(), ()> {
+pub fn catch_fatal_errors<F: FnOnce() -> R, R>(f: F) -> Result<R, FatalError> {
+    catch_unwind(panic::AssertUnwindSafe(f)).map_err(|value| {
+        if value.is::<errors::FatalErrorMarker>() {
+            FatalError
+        } else {
+            panic::resume_unwind(value);
+        }
+    })
+}
+
+pub fn catch_with_exit_code(f: impl FnOnce()) -> i32 {
+    match catch_fatal_errors(f) {
+        Ok(()) => EXIT_SUCCESS,
+        _ => EXIT_FAILURE,
+    }
+}
+
+pub fn main() -> ! {
     let args = Args::parse();
     let file_path = args.source_file;
     let file_contents = std::fs::read_to_string(file_path).map_err(|_| ())?;
 
-    let mut compilation_unit = CompilationUnit::compile(&file_contents).map_err(|_| ())?;
-    compilation_unit.run();
-    Ok(())
+    let early_dcx = EarlyDiagCtx::new(ErrorOutputType::default());
+
+    let mut callbacks = TimePassesCallbacks::default();
+    let exit_code =
+        catch_with_exit_code(|| run_compiler(&args::raw_args(&early_dcx), &mut callbacks));
+
+    process::exit(exit_code)
 }

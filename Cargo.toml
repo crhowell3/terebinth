@@ -12,5 +12,16 @@ rust-version = "1.85"
 [dependencies]
 anyhow = "1.0.97"
 clap = { version = "4.5.31", features = ["derive"] }
+ena = "0.14.3"
 log = "0.4.21"
+terebinth_arena_allocator = { path = "./src/terebinth_arena_allocator" }
+terebinth_ast = { path = "./src/terebinth_ast" }
+terebinth_data_structures = { path = "./src/terebinth_data_structures" }
+terebinth_lexer = { path = "./src/terebinth_lexer" }
+terebinth_macros = { path = "./src/terebinth_macros" }
 termion = "4.0.4"
+
+[dependencies.unicode-properties]
+version = "0.1.0"
+default-features = false
+features = ["emoji"]
